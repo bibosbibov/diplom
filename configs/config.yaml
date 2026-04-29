@@ -1,0 +1,210 @@
+# =============================================================================
+# Конфигурация проекта
+# Система автоматической оценки критичности уязвимостей ПО на основе CVSS v4.0
+# =============================================================================
+#
+# Все пути относительны корню проекта. Секреты — через переменные окружения
+# (см. .env.example), здесь их быть не должно.
+# =============================================================================
+
+project:
+  name: "cvss-v4-mbert"
+  seed: 42
+  device: "auto"          # "cuda" | "cpu" | "auto"
+
+# -----------------------------------------------------------------------------
+# Источники данных (URL и rate limits)
+# -----------------------------------------------------------------------------
+data_sources:
+  bdu_fstec:
+    url: "https://bdu.fstec.ru/files/documents/vullist.xml"
+    url_xlsx: "https://bdu.fstec.ru/files/documents/vullist.xlsx"
+    timeout_sec: 60
+
+  nvd:
+    base_url: "https://services.nvd.nist.gov/rest/json/cves/2.0"
+    page_size: 2000
+    rate_limit_with_key:    50    # запросов / 30 сек
+    rate_limit_without_key: 5     # запросов / 30 сек
+    timeout_sec: 30
+    retries: 5
+
+  epss:
+    base_url: "https://api.first.org/data/v1/epss"
+    page_size: 1000
+    timeout_sec: 30
+
+  cisa_kev:
+    url: "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
+    timeout_sec: 30
+
+  exploit_db:
+    url: "https://gitlab.com/exploit-database/exploitdb/-/raw/main/files_exploits.csv"
+    mirror: "https://github.com/offensive-security/exploitdb/raw/master/files_exploits.csv"
+    timeout_sec: 60
+
+  cwe_mitre:
+    url: "https://cwe.mitre.org/data/xml/cwec_latest.xml.zip"
+    timeout_sec: 120
+
+# -----------------------------------------------------------------------------
+# Пути
+# -----------------------------------------------------------------------------
+paths:
+  data_raw: "data/raw"
+  data_processed: "data/processed"
+  cwe_vocab: "data/processed/cwe_vocab.json"
+  train_split: "data/processed/train.parquet"
+  val_split: "data/processed/val.parquet"
+  test_split: "data/processed/test.parquet"
+  models_dir: "models"
+  checkpoints_dir: "models/checkpoints"
+  logs_dir: "logs"
+  reports_dir: "reports"
+  figures_dir: "reports/figures"
+  tensorboard_dir: "logs/tensorboard"
+
+# -----------------------------------------------------------------------------
+# Подготовка данных
+# -----------------------------------------------------------------------------
+data_preparation:
+  pretrained_tokenizer: "bert-base-multilingual-cased"
+  max_length: 512
+  truncation: true
+  padding: "max_length"
+  prefer_language: "ru"          # "ru" приоритетнее "en"; если ru нет — берём en
+  missing_marker: -1             # маркер отсутствующих EPSS / KEV / exploit
+  split_ratios:
+    train: 0.80
+    val:  0.10
+    test: 0.10
+  stratify_by: "severity"        # стратифицируем по итоговому уровню критичности
+  split_unit: "cve_id"           # разбиение по уникальному CVE (защита от утечки)
+
+# -----------------------------------------------------------------------------
+# Архитектура модели
+# -----------------------------------------------------------------------------
+model:
+  pretrained_name: "bert-base-multilingual-cased"
+  text_hidden_size: 768
+  cwe_embedding_dim: 64
+  numeric_features_dim: 3        # epss, kev, exploit
+  feature_encoder:
+    input_dim:  67               # 3 + 64
+    hidden_dim: 128
+    output_dim: 64
+  fusion:
+    input_dim:  832              # 768 + 64
+    output_dim: 512
+    dropout: 0.1
+  metrics:
+    # Базовый вектор CVSS v4.0 — 12 голов классификации
+    AV: ["N", "A", "L", "P"]
+    AC: ["L", "H"]
+    AT: ["N", "P"]
+    PR: ["N", "L", "H"]
+    UI: ["N", "P", "A"]
+    VC: ["H", "L", "N"]
+    VI: ["H", "L", "N"]
+    VA: ["H", "L", "N"]
+    SC: ["H", "L", "N"]
+    SI: ["H", "L", "N"]
+    SA: ["H", "L", "N"]
+    E:  ["A", "P", "U"]
+
+# -----------------------------------------------------------------------------
+# Обучение — двухэтапная стратегия
+# -----------------------------------------------------------------------------
+training:
+  optimizer: "AdamW"
+  scheduler: "linear_warmup_decay"
+  warmup_ratio: 0.10
+  weight_decay: 0.01
+  dropout: 0.1
+  early_stopping_patience: 3
+  gradient_clip_norm: 1.0
+  num_workers: 4
+  pin_memory: true
+  log_interval_steps: 50
+  save_top_k: 1
+
+  stage1:
+    name: "pretrain_cvss_v3_1"
+    metrics: ["AV", "AC", "PR", "UI", "VC", "VI", "VA", "E"]
+    learning_rate: 2.0e-5
+    batch_size: 32
+    max_epochs: 10
+    checkpoint_name: "stage1_best.pt"
+
+  stage2:
+    name: "finetune_cvss_v4_0"
+    metrics: ["AV", "AC", "AT", "PR", "UI", "VC", "VI", "VA", "SC", "SI", "SA", "E"]
+    learning_rate: 1.0e-5
+    batch_size: 16
+    max_epochs: 20
+    checkpoint_name: "stage2_best.pt"
+    init_from_stage1: true
+    new_heads: ["AT", "SC", "SI", "SA"]   # инициализируются случайно
+
+# -----------------------------------------------------------------------------
+# Калькулятор CVSS v4.0 (собственная реализация по спецификации FIRST)
+# -----------------------------------------------------------------------------
+cvss_calculator:
+  spec_url: "https://www.first.org/cvss/v4.0/specification-document"
+  reference_impl_url: "https://github.com/FIRSTdotorg/cvss-v4-calculator"
+  max_total_distance: 0.5             # ограничение интерполяции min(d, 0.5)
+  exploit_maturity_modifiers:
+    A: 1.00                            # Attacked
+    P: 0.94                            # POC
+    U: 0.91                            # Unreported
+  severity_thresholds:
+    none:     0.0
+    low:      0.1
+    medium:   4.0
+    high:     7.0
+    critical: 9.0
+
+# -----------------------------------------------------------------------------
+# Оценка качества
+# -----------------------------------------------------------------------------
+evaluation:
+  k_fold: 5
+  metrics_per_head:
+    - "accuracy"
+    - "precision_macro"
+    - "recall_macro"
+    - "f1_macro"
+    - "confusion_matrix"
+  score_metrics:
+    - "mae"
+    - "rmse"
+    - "severity_accuracy"           # точность определения уровня (None…Critical)
+
+# -----------------------------------------------------------------------------
+# Inference
+# -----------------------------------------------------------------------------
+inference:
+  default_checkpoint: "models/checkpoints/stage2_best.pt"
+  return_confidences: true
+  batch_size: 16
+
+# -----------------------------------------------------------------------------
+# Веб-сервис (FastAPI)
+# -----------------------------------------------------------------------------
+api:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 1
+  cors_origins: ["*"]
+  request_timeout_sec: 30
+
+# -----------------------------------------------------------------------------
+# Логирование
+# -----------------------------------------------------------------------------
+logging:
+  format: "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+  datefmt: "%Y-%m-%d %H:%M:%S"
+  file_level: "INFO"
+  console_level: "WARNING"
+  rotate_max_bytes: 10485760           # 10 MB
+  rotate_backup_count: 5

@@ -1,0 +1,108 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# === Virtual environments ===
+.venv/
+venv/
+env/
+ENV/
+.python-version
+
+# === Environment variables / secrets ===
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# === IDE / editors ===
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# === Jupyter ===
+.ipynb_checkpoints/
+*/.ipynb_checkpoints/*
+
+# === Testing / coverage ===
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# === Type checkers ===
+.mypy_cache/
+.pyre/
+.pytype/
+
+# === Project artefacts ===
+data/raw/
+data/processed/
+data/interim/
+*.parquet
+*.csv
+# Выгрузки БДУ ФСТЭК и архивы CWE в корне проекта
+/vulxml.xml
+/vullist.xml
+/vullist.xlsx
+cwec_*.xml
+cwec_*.zip
+models/
+models/checkpoints/
+*.pt
+*.pth
+*.bin
+*.safetensors
+*.onnx
+*.ckpt
+
+# === Logs ===
+logs/
+*.log
+
+# === TensorBoard ===
+runs/
+tb_logs/
+
+# === Reports (опционально, итоговые файлы можно коммитить вручную) ===
+reports/figures/*.png
+reports/*.json
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Distribution / packaging ===
+*.tar.gz
+*.zip
+
+# === Docker ===
+*.pid
