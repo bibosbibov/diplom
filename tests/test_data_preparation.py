@@ -69,6 +69,51 @@ def test_parse_v4_empty_or_none():
     assert parse_v4_vector("") == {m: None for m in V4_METRIC_ORDER}
 
 
+# ----- маркер X (Not Defined) в выгрузках NVD --------------------------------
+
+
+class TestParseV4WithXMarker:
+    """Обработка маркера ``X`` в CVSS v4.0 — спецификация FIRST §2.4.1."""
+
+    def test_e_x_replaced_with_a(self):
+        """E:X → A (Attacked) — значение по умолчанию для Exploit Maturity."""
+        parsed = parse_v4_vector(
+            "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N/E:X"
+        )
+        assert parsed["E"] == "A"
+
+    @pytest.mark.parametrize(
+        "metric",
+        ["AV", "AC", "AT", "PR", "UI", "VC", "VI", "VA", "SC", "SI", "SA"],
+    )
+    def test_base_metric_x_raises(self, metric):
+        """Любая из 11 базовых метрик со значением X → ValueError."""
+        # Заведомо валидный базовый вектор и подмена одной метрики на X.
+        base = {
+            "AV": "N", "AC": "L", "AT": "N", "PR": "N", "UI": "N",
+            "VC": "H", "VI": "H", "VA": "H", "SC": "N", "SI": "N", "SA": "N",
+        }
+        base[metric] = "X"
+        vector = "CVSS:4.0/" + "/".join(f"{k}:{v}" for k, v in base.items())
+        with pytest.raises(ValueError, match=metric):
+            parse_v4_vector(vector)
+
+    def test_full_nvd_vector(self):
+        """Полный вектор из NVD со всеми X-маркерами в дополнительных метриках."""
+        vector = (
+            "CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:L/VI:L/VA:L/SC:N/SI:N/SA:N/"
+            "E:X/CR:X/IR:X/AR:X/MAV:X/MAC:X/MAT:X/MPR:X/MUI:X/MVC:X/MVI:X/MVA:X/"
+            "MSC:X/MSI:X/MSA:X/S:X/AU:X/R:X/V:X/RE:X/U:X"
+        )
+        parsed = parse_v4_vector(vector)
+        assert parsed == {
+            "AV": "N", "AC": "L", "AT": "N", "PR": "L", "UI": "N",
+            "VC": "L", "VI": "L", "VA": "L",
+            "SC": "N", "SI": "N", "SA": "N",
+            "E": "A",
+        }
+
+
 # ============================================================ CVSS v3.x parser
 
 

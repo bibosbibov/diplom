@@ -71,14 +71,41 @@ def _kv_pairs(vector_str: str | None) -> dict[str, str]:
     return {m.group(1).upper(): m.group(2).upper() for m in _KV_RE.finditer(vector_str)}
 
 
+#: Базовые метрики CVSS v4.0 — обязательны, значение ``X`` (Not Defined) недопустимо.
+_V4_BASE_METRICS: frozenset[str] = frozenset(
+    {"AV", "AC", "AT", "PR", "UI", "VC", "VI", "VA", "SC", "SI", "SA"}
+)
+
+
 def parse_v4_vector(vector_str: str | None) -> dict[str, str | None]:
     """Парсит CVSS:4.0 вектор в dict из 12 канонических метрик.
 
     Поддерживает формат с префиксом ``CVSS:4.0/`` и без; значения метрик
     из дополнительных групп (например ``AU:Y``) игнорируются.
+
+    Обработка маркера ``X`` (Not Defined), который встречается в выгрузках NVD:
+        * для метрики ``E`` ``X`` заменяется на ``A`` (Attacked) —
+          значение по умолчанию по спецификации FIRST CVSS v4.0 (раздел 2.4.1);
+        * для базовых метрик (AV/AC/AT/PR/UI/VC/VI/VA/SC/SI/SA) ``X`` —
+          ошибка: эти метрики обязательны и не могут быть Not Defined.
+
+    Raises:
+        ValueError: если базовая метрика имеет значение ``X``.
     """
     pairs = _kv_pairs(vector_str)
-    return {metric: pairs.get(metric) for metric in V4_METRIC_ORDER}
+    result: dict[str, str | None] = {}
+    for metric in V4_METRIC_ORDER:
+        value = pairs.get(metric)
+        if value == "X":
+            if metric in _V4_BASE_METRICS:
+                raise ValueError(
+                    f"Базовая метрика {metric} не может иметь значение X "
+                    "в CVSS v4.0 — это обязательная метрика"
+                )
+            if metric == "E":
+                value = "A"
+        result[metric] = value
+    return result
 
 
 def parse_v3_vector(vector_str: str | None) -> dict[str, str | None]:
