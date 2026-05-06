@@ -95,10 +95,11 @@ class MultiTaskLoss(nn.Module):
             total = loss_i if total is None else total + loss_i
 
         if total is None:
-            # Все активные метрики пусты — возвращаем нулевой тензор,
-            # сохраняющий граф (на случай, если он нужен для backward).
+            # Все активные метрики пусты — возвращаем ноль, привязанный
+            # к графу через logits, чтобы backward не падал с
+            # "element 0 ... does not require grad and does not have a grad_fn".
             any_logits = next(iter(logits.values()))
-            total = torch.zeros((), device=any_logits.device, dtype=any_logits.dtype)
+            total = (any_logits * 0.0).sum()
 
         return total, per_metric
 
