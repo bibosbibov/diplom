@@ -188,21 +188,38 @@ def run(
 
     if stage in (1, 0):
         logger.info("=== STAGE 1 ===")
+        # Фильтруем строки без cvss_v3_vector — иначе все 8 голов получают
+        # IGNORE_INDEX и MultiTaskLoss возвращает (logits*0).sum() с нулевым
+        # градиентом, превращая батч в no-op.
+        train_df_v3 = train_df[train_df["cvss_v3_vector"].notna()].reset_index(drop=True)
+        val_df_v3 = val_df[val_df["cvss_v3_vector"].notna()].reset_index(drop=True)
+        logger.info(
+            "stage1: filtered to v3-only — train=%d, val=%d",
+            len(train_df_v3), len(val_df_v3),
+        )
         model = _build_model(config, "stage1", num_cwe=len(cwe_encoder))
         trainer = Trainer(config, model, device=device)
         if resume is not None:
             trainer.load_checkpoint(resume)
         train_loader, val_loader = _make_loaders(
-            train_df, val_df, tokenizer, cwe_encoder, features_encoder,
+            train_df_v3, val_df_v3, tokenizer, cwe_encoder, features_encoder,
             version="v3",
             batch_size=int(config["stage1"]["batch_size"]),
             max_length=max_length,
         )
-        history["stage1"] = trainer.train_stage1(train_loader, val_loader, train_df=train_df)
+        history["stage1"] = trainer.train_stage1(train_loader, val_loader, train_df=train_df_v3)
         trainer.close()
 
     if stage in (2, 0):
         logger.info("=== STAGE 2 ===")
+        # Фильтруем строки без cvss_v4_vector: в датасете лишь ~3.8% строк
+        # имеют v4-вектор, остальные дали бы пустой батч с нулевым градиентом.
+        train_df_v4 = train_df[train_df["cvss_v4_vector"].notna()].reset_index(drop=True)
+        val_df_v4 = val_df[val_df["cvss_v4_vector"].notna()].reset_index(drop=True)
+        logger.info(
+            "stage2: filtered to v4-only — train=%d, val=%d",
+            len(train_df_v4), len(val_df_v4),
+        )
         # Если идём stage 0 (1+2), модель надо построить под v4-головы заранее.
         # Trainer всё равно сделает reinit, но размеры и порядок голов должны
         # соответствовать stage2.metric_classes уже на этапе создания.
@@ -211,12 +228,12 @@ def run(
         if resume is not None and stage == 2:
             trainer.load_checkpoint(resume)
         train_loader, val_loader = _make_loaders(
-            train_df, val_df, tokenizer, cwe_encoder, features_encoder,
+            train_df_v4, val_df_v4, tokenizer, cwe_encoder, features_encoder,
             version="v4",
             batch_size=int(config["stage2"]["batch_size"]),
             max_length=max_length,
         )
-        history["stage2"] = trainer.train_stage2(train_loader, val_loader, train_df=train_df)
+        history["stage2"] = trainer.train_stage2(train_loader, val_loader, train_df=train_df_v4)
         trainer.close()
 
         # Финальная модель сохраняется только когда выполнен stage 2.
