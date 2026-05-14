@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import random
-from typing import Tuple
 
 import numpy as np
 import torch
@@ -27,6 +26,7 @@ def set_seed(seed: int = 42) -> None:
 
     try:
         import transformers
+
         transformers.set_seed(seed)
     except ImportError:
         # transformers — опциональная зависимость для тестов утилит.
@@ -46,7 +46,7 @@ def get_device() -> torch.device:
     return torch.device("cpu")
 
 
-def count_parameters(model: nn.Module) -> Tuple[int, int]:
+def count_parameters(model: nn.Module) -> tuple[int, int]:
     """Возвращает ``(total, trainable)`` число параметров модели."""
     total = sum(p.numel() for p in model.parameters())
     trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)

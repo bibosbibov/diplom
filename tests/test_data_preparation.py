@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -23,31 +22,100 @@ from src.data_preparation.cwe_encoder import CWEEncoder
 from src.data_preparation.features_encoder import FeaturesEncoder
 from src.data_preparation.text_processor import TextProcessor
 
-
 # ============================================================ CVSS v4.0 parser
 
 # 5 реальных векторов: первые 3 из БДУ ФСТЭК, 2 из NVD-документации.
 REAL_V4_VECTORS = [
     # CVE-2024-8937 / БДУ:2024-09683
-    ("AV:N/AC:H/AT:P/PR:N/UI:N/VC:H/VI:L/VA:N/SC:N/SI:N/SA:N",
-     {"AV": "N", "AC": "H", "AT": "P", "PR": "N", "UI": "N",
-      "VC": "H", "VI": "L", "VA": "N", "SC": "N", "SI": "N", "SA": "N", "E": None}),
+    (
+        "AV:N/AC:H/AT:P/PR:N/UI:N/VC:H/VI:L/VA:N/SC:N/SI:N/SA:N",
+        {
+            "AV": "N",
+            "AC": "H",
+            "AT": "P",
+            "PR": "N",
+            "UI": "N",
+            "VC": "H",
+            "VI": "L",
+            "VA": "N",
+            "SC": "N",
+            "SI": "N",
+            "SA": "N",
+            "E": None,
+        },
+    ),
     # CVE-2024-11056 / БДУ:2024-09775
-    ("AV:N/AC:L/AT:N/PR:L/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
-     {"AV": "N", "AC": "L", "AT": "N", "PR": "L", "UI": "N",
-      "VC": "H", "VI": "H", "VA": "H", "SC": "N", "SI": "N", "SA": "N", "E": None}),
+    (
+        "AV:N/AC:L/AT:N/PR:L/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N",
+        {
+            "AV": "N",
+            "AC": "L",
+            "AT": "N",
+            "PR": "L",
+            "UI": "N",
+            "VC": "H",
+            "VI": "H",
+            "VA": "H",
+            "SC": "N",
+            "SI": "N",
+            "SA": "N",
+            "E": None,
+        },
+    ),
     # CVE-2024-0012 / БДУ:2024-09796
-    ("AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:L/SI:L/SA:L",
-     {"AV": "N", "AC": "L", "AT": "N", "PR": "N", "UI": "N",
-      "VC": "H", "VI": "H", "VA": "H", "SC": "L", "SI": "L", "SA": "L", "E": None}),
+    (
+        "AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:L/SI:L/SA:L",
+        {
+            "AV": "N",
+            "AC": "L",
+            "AT": "N",
+            "PR": "N",
+            "UI": "N",
+            "VC": "H",
+            "VI": "H",
+            "VA": "H",
+            "SC": "L",
+            "SI": "L",
+            "SA": "L",
+            "E": None,
+        },
+    ),
     # С префиксом и threat-метрикой E
-    ("CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:H/SI:H/SA:H/E:A",
-     {"AV": "N", "AC": "L", "AT": "N", "PR": "N", "UI": "N",
-      "VC": "H", "VI": "H", "VA": "H", "SC": "H", "SI": "H", "SA": "H", "E": "A"}),
+    (
+        "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:H/VI:H/VA:H/SC:H/SI:H/SA:H/E:A",
+        {
+            "AV": "N",
+            "AC": "L",
+            "AT": "N",
+            "PR": "N",
+            "UI": "N",
+            "VC": "H",
+            "VI": "H",
+            "VA": "H",
+            "SC": "H",
+            "SI": "H",
+            "SA": "H",
+            "E": "A",
+        },
+    ),
     # БДУ:2024-09800 — с дополнительной (не базовой) AU:Y, должна игнорироваться
-    ("AV:N/AC:L/AT:P/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N/AU:Y",
-     {"AV": "N", "AC": "L", "AT": "P", "PR": "N", "UI": "N",
-      "VC": "H", "VI": "H", "VA": "H", "SC": "N", "SI": "N", "SA": "N", "E": None}),
+    (
+        "AV:N/AC:L/AT:P/PR:N/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N/AU:Y",
+        {
+            "AV": "N",
+            "AC": "L",
+            "AT": "P",
+            "PR": "N",
+            "UI": "N",
+            "VC": "H",
+            "VI": "H",
+            "VA": "H",
+            "SC": "N",
+            "SI": "N",
+            "SA": "N",
+            "E": None,
+        },
+    ),
 ]
 
 
@@ -90,8 +158,17 @@ class TestParseV4WithXMarker:
         """Любая из 11 базовых метрик со значением X → ValueError."""
         # Заведомо валидный базовый вектор и подмена одной метрики на X.
         base = {
-            "AV": "N", "AC": "L", "AT": "N", "PR": "N", "UI": "N",
-            "VC": "H", "VI": "H", "VA": "H", "SC": "N", "SI": "N", "SA": "N",
+            "AV": "N",
+            "AC": "L",
+            "AT": "N",
+            "PR": "N",
+            "UI": "N",
+            "VC": "H",
+            "VI": "H",
+            "VA": "H",
+            "SC": "N",
+            "SI": "N",
+            "SA": "N",
         }
         base[metric] = "X"
         vector = "CVSS:4.0/" + "/".join(f"{k}:{v}" for k, v in base.items())
@@ -107,9 +184,17 @@ class TestParseV4WithXMarker:
         )
         parsed = parse_v4_vector(vector)
         assert parsed == {
-            "AV": "N", "AC": "L", "AT": "N", "PR": "L", "UI": "N",
-            "VC": "L", "VI": "L", "VA": "L",
-            "SC": "N", "SI": "N", "SA": "N",
+            "AV": "N",
+            "AC": "L",
+            "AT": "N",
+            "PR": "L",
+            "UI": "N",
+            "VC": "L",
+            "VI": "L",
+            "VA": "L",
+            "SC": "N",
+            "SI": "N",
+            "SA": "N",
             "E": "A",
         }
 
@@ -378,7 +463,6 @@ def test_dataset_v4_shapes_and_labels():
 
 def test_dataset_v3_uses_v3_metric_order():
     pytest.importorskip("torch")
-    import torch
 
     from src.data_preparation.dataset import CVSSDataset
 
@@ -419,7 +503,6 @@ def test_dataset_v3_uses_v3_metric_order():
 
 def test_dataset_dataloader_batches_correctly():
     pytest.importorskip("torch")
-    import torch
     from torch.utils.data import DataLoader
 
     from src.data_preparation.dataset import CVSSDataset

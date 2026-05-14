@@ -4,8 +4,6 @@ Translated from the RedHatProductSecurity cvss-v4-calculator repository:
 https://github.com/RedHatProductSecurity/cvss-v4-calculator
 """
 
-from __future__ import unicode_literals
-
 try:
     from collections import OrderedDict
 except ImportError:

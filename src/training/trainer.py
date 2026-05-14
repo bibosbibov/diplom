@@ -18,8 +18,9 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -58,11 +59,11 @@ class Trainer:
         self,
         config: Mapping[str, Any],
         model: CVSSModel,
-        device: Optional[torch.device] = None,
+        device: torch.device | None = None,
     ) -> None:
-        self.config: Dict[str, Any] = dict(config)
-        self.common: Dict[str, Any] = dict(self.config.get("common", {}))
-        self.paths: Dict[str, str] = dict(self.config.get("paths", {}))
+        self.config: dict[str, Any] = dict(config)
+        self.common: dict[str, Any] = dict(self.config.get("common", {}))
+        self.paths: dict[str, str] = dict(self.config.get("paths", {}))
 
         self.device = device if device is not None else get_device()
         self.model = model.to(self.device)
@@ -74,17 +75,13 @@ class Trainer:
 
         self.gradient_clip: float = float(self.common.get("gradient_clip", 1.0))
         self.log_every_n: int = int(self.common.get("log_every_n_batches", 50))
-        self.checkpoint_every_epoch: bool = bool(
-            self.common.get("checkpoint_every_epoch", True)
-        )
+        self.checkpoint_every_epoch: bool = bool(self.common.get("checkpoint_every_epoch", True))
         self.patience: int = int(self.common.get("early_stopping_patience", 3))
 
         seed = int(self.config.get("seed", 42))
         set_seed(seed)
 
-        self.checkpoints_dir = Path(
-            self.paths.get("checkpoints_dir", "models/checkpoints/")
-        )
+        self.checkpoints_dir = Path(self.paths.get("checkpoints_dir", "models/checkpoints/"))
         self.checkpoints_dir.mkdir(parents=True, exist_ok=True)
         self.models_dir = Path(self.paths.get("models_dir", "models/"))
         self.models_dir.mkdir(parents=True, exist_ok=True)
@@ -111,8 +108,8 @@ class Trainer:
         — обучается с decay из ``common.weight_decay``.
         """
         no_decay_keys = ("bias", "LayerNorm.weight", "LayerNorm.bias")
-        decay_params: List[nn.Parameter] = []
-        no_decay_params: List[nn.Parameter] = []
+        decay_params: list[nn.Parameter] = []
+        no_decay_params: list[nn.Parameter] = []
 
         for name, param in self.model.named_parameters():
             if not param.requires_grad:
@@ -146,12 +143,12 @@ class Trainer:
 
     # --------------------------------------------------------------- batch I/O
 
-    def _move_batch(self, batch: Mapping[str, Any]) -> Dict[str, Any]:
+    def _move_batch(self, batch: Mapping[str, Any]) -> dict[str, Any]:
         """Переносит тензоры батча на ``self.device``.
 
         Поле ``labels`` — это dict[str, Tensor], его обрабатываем отдельно.
         """
-        moved: Dict[str, Any] = {}
+        moved: dict[str, Any] = {}
         for key, value in batch.items():
             if key == "labels":
                 moved[key] = {k: v.to(self.device) for k, v in value.items()}
@@ -169,8 +166,8 @@ class Trainer:
         optimizer: AdamW,
         scheduler: LambdaLR,
         loss_fn: MultiTaskLoss,
-        scaler: Optional[torch.amp.GradScaler],
-        active_metrics: List[str],
+        scaler: torch.amp.GradScaler | None,
+        active_metrics: list[str],
         epoch_num: int,
         stage_num: int,
     ) -> float:
@@ -199,9 +196,7 @@ class Trainer:
                     loss, per_metric = loss_fn(logits, batch["labels"])
                 scaler.scale(loss).backward()
                 scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(), self.gradient_clip
-                )
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip)
                 scaler.step(optimizer)
                 scaler.update()
             else:
@@ -213,9 +208,7 @@ class Trainer:
                 )
                 loss, per_metric = loss_fn(logits, batch["labels"])
                 loss.backward()
-                torch.nn.utils.clip_grad_norm_(
-                    self.model.parameters(), self.gradient_clip
-                )
+                torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.gradient_clip)
                 optimizer.step()
 
             scheduler.step()
@@ -227,9 +220,7 @@ class Trainer:
 
             if self._global_step % self.log_every_n == 0:
                 tag_prefix = f"stage{stage_num}/train"
-                self.writer.add_scalar(
-                    f"{tag_prefix}/loss", loss.item(), self._global_step
-                )
+                self.writer.add_scalar(f"{tag_prefix}/loss", loss.item(), self._global_step)
                 self.writer.add_scalar(
                     f"{tag_prefix}/lr",
                     optimizer.param_groups[0]["lr"],
@@ -238,7 +229,7 @@ class Trainer:
                 if torch.cuda.is_available():
                     self.writer.add_scalar(
                         f"{tag_prefix}/gpu_memory_mb",
-                        torch.cuda.memory_allocated() / (1024 ** 2),
+                        torch.cuda.memory_allocated() / (1024**2),
                         self._global_step,
                     )
                 for metric_name, metric_loss in per_metric.items():
@@ -257,15 +248,15 @@ class Trainer:
         self,
         loader: DataLoader,
         loss_fn: MultiTaskLoss,
-        active_metrics: List[str],
-    ) -> Dict[str, Any]:
+        active_metrics: list[str],
+    ) -> dict[str, Any]:
         """Прогон по валидации; возвращает loss + per-metric F1/accuracy."""
         self.model.eval()
         running_loss = 0.0
         n_batches = 0
 
-        y_true: Dict[str, List[int]] = defaultdict(list)
-        y_pred: Dict[str, List[int]] = defaultdict(list)
+        y_true: dict[str, list[int]] = defaultdict(list)
+        y_pred: dict[str, list[int]] = defaultdict(list)
 
         for batch in tqdm(loader, desc="eval", leave=False):
             batch = self._move_batch(batch)
@@ -291,8 +282,8 @@ class Trainer:
                 y_pred[metric].extend(preds[mask].cpu().tolist())
                 y_true[metric].extend(targets[mask].cpu().tolist())
 
-        per_metric: Dict[str, Dict[str, float]] = {}
-        f1_values: List[float] = []
+        per_metric: dict[str, dict[str, float]] = {}
+        f1_values: list[float] = []
         for metric in active_metrics:
             if not y_true[metric]:
                 continue
@@ -318,10 +309,10 @@ class Trainer:
 
     def _make_class_weights(
         self,
-        train_df: Optional[pd.DataFrame],
-        active_metrics: List[str],
+        train_df: pd.DataFrame | None,
+        active_metrics: list[str],
         metric_classes: Mapping[str, int],
-    ) -> Optional[Dict[str, torch.Tensor]]:
+    ) -> dict[str, torch.Tensor] | None:
         """Считает веса классов по train-DataFrame для каждой активной метрики.
 
         Если ``train_df`` не передан или в нём нет колонки метрики — веса
@@ -329,14 +320,12 @@ class Trainer:
         """
         if train_df is None:
             return None
-        weights: Dict[str, torch.Tensor] = {}
+        weights: dict[str, torch.Tensor] = {}
         for metric in active_metrics:
             if metric not in train_df.columns:
                 continue
             n_cls = int(metric_classes[metric])
-            weights[metric] = compute_class_weights(train_df, metric, n_cls).to(
-                self.device
-            )
+            weights[metric] = compute_class_weights(train_df, metric, n_cls).to(self.device)
         return weights or None
 
     # ------------------------------------------------------ stage 2 head reinit
@@ -352,7 +341,7 @@ class Trainer:
         from src.model.classification_heads import ClassificationHeads
 
         stage2 = self.config["stage2"]
-        new_classes: Dict[str, int] = dict(stage2["metric_classes"])
+        new_classes: dict[str, int] = dict(stage2["metric_classes"])
         reinit: set[str] = set(stage2.get("reinit_heads", []))
 
         old_heads = self.model.heads
@@ -362,8 +351,8 @@ class Trainer:
             metric_classes=new_classes,
         ).to(self.device)
 
-        kept: List[str] = []
-        reinitialized: List[str] = []
+        kept: list[str] = []
+        reinitialized: list[str] = []
         for metric, head in new_heads.items():
             if metric in reinit:
                 nn.init.xavier_uniform_(head.weight)
@@ -371,10 +360,7 @@ class Trainer:
                 reinitialized.append(metric)
                 continue
             old_head = old_heads[metric] if metric in old_heads else None
-            if (
-                old_head is not None
-                and old_head.weight.shape == head.weight.shape
-            ):
+            if old_head is not None and old_head.weight.shape == head.weight.shape:
                 head.weight.data.copy_(old_head.weight.data)
                 head.bias.data.copy_(old_head.bias.data)
                 kept.append(metric)
@@ -409,11 +395,7 @@ class Trainer:
             state = state["model_state"]
 
         own = self.model.state_dict()
-        compatible = {
-            k: v
-            for k, v in state.items()
-            if k in own and own[k].shape == v.shape
-        }
+        compatible = {k: v for k, v in state.items() if k in own and own[k].shape == v.shape}
         skipped = sorted(set(state) - set(compatible))
         missing = sorted(set(own) - set(compatible))
         self.model.load_state_dict(compatible, strict=False)
@@ -432,18 +414,16 @@ class Trainer:
         stage_config: Mapping[str, Any],
         train_loader: DataLoader,
         val_loader: DataLoader,
-        train_df: Optional[pd.DataFrame],
+        train_df: pd.DataFrame | None,
         best_save_path: Path,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Общий цикл обучения, параметризованный конфигом этапа."""
-        active_metrics: List[str] = list(stage_config["metrics"])
+        active_metrics: list[str] = list(stage_config["metrics"])
         epochs: int = int(stage_config["epochs"])
         warmup_ratio: float = float(stage_config["warmup_ratio"])
         metric_classes: Mapping[str, int] = stage_config["metric_classes"]
 
-        class_weights = self._make_class_weights(
-            train_df, active_metrics, metric_classes
-        )
+        class_weights = self._make_class_weights(train_df, active_metrics, metric_classes)
         loss_fn = MultiTaskLoss(
             active_metrics=active_metrics,
             class_weights=class_weights,
@@ -460,7 +440,7 @@ class Trainer:
             save_path=best_save_path,
         )
 
-        history: Dict[str, List[Any]] = {
+        history: dict[str, list[Any]] = {
             "train_loss": [],
             "val_loss": [],
             "macro_f1": [],
@@ -490,12 +470,8 @@ class Trainer:
             self.writer.add_scalar(f"{tag}/epoch_val_loss", val["val_loss"], epoch)
             self.writer.add_scalar(f"{tag}/macro_f1", val["macro_f1"], epoch)
             for metric, scores in val["per_metric"].items():
-                self.writer.add_scalar(
-                    f"{tag}/val_f1/{metric}", scores["f1"], epoch
-                )
-                self.writer.add_scalar(
-                    f"{tag}/val_acc/{metric}", scores["accuracy"], epoch
-                )
+                self.writer.add_scalar(f"{tag}/val_f1/{metric}", scores["f1"], epoch)
+                self.writer.add_scalar(f"{tag}/val_acc/{metric}", scores["accuracy"], epoch)
 
             logger.info(
                 "stage%d epoch %d: train_loss=%.4f val_loss=%.4f macro_f1=%.4f",
@@ -512,19 +488,11 @@ class Trainer:
                 f"macro_f1={val['macro_f1']:.4f}"
             )
             for metric, scores in val["per_metric"].items():
-                print(
-                    f"    {metric}: f1={scores['f1']:.3f} "
-                    f"acc={scores['accuracy']:.3f}"
-                )
+                print(f"    {metric}: f1={scores['f1']:.3f} " f"acc={scores['accuracy']:.3f}")
 
             if self.checkpoint_every_epoch:
-                ckpt_path = (
-                    self.checkpoints_dir
-                    / f"stage{stage_num}_epoch{epoch}.pt"
-                )
-                self.save_checkpoint(
-                    ckpt_path, optimizer, scheduler, epoch, stage_num
-                )
+                ckpt_path = self.checkpoints_dir / f"stage{stage_num}_epoch{epoch}.pt"
+                self.save_checkpoint(ckpt_path, optimizer, scheduler, epoch, stage_num)
 
             should_stop = early_stopping.step(val["macro_f1"], self.model)
             if should_stop:
@@ -545,9 +513,24 @@ class Trainer:
         self,
         train_loader: DataLoader,
         val_loader: DataLoader,
-        train_df: Optional[pd.DataFrame] = None,
-    ) -> Dict[str, Any]:
-        """Этап 1: предобучение на 8 общих с CVSS v3.1 метриках."""
+        train_df: pd.DataFrame | None = None,
+    ) -> dict[str, Any]:
+        """Этап 1 — предобучение на 8 общих с CVSS v3.1 метриках.
+
+        Обучаются головы ``AV, AC, PR, UI, VC, VI, VA, E``; голова ``E``
+        работает на расширенном словаре v3.1 (5 классов). Чекпоинт
+        ``best_stage1.pt`` сохраняется по лучшему val_loss.
+
+        Args:
+            train_loader: DataLoader на train.parquet (≈123 тыс. записей).
+            val_loader: DataLoader на val.parquet.
+            train_df: Опциональный train DataFrame для логирования распределения
+                классов.
+
+        Returns:
+            Словарь ``history`` со списками ``train_loss``, ``val_loss`` и
+            ``per_metric_f1`` по эпохам, а также путь к лучшему чекпоинту.
+        """
         stage_config = self.config["stage1"]
         best_path = self.models_dir / "best_stage1.pt"
         return self._run_stage(
@@ -563,15 +546,27 @@ class Trainer:
         self,
         train_loader: DataLoader,
         val_loader: DataLoader,
-        train_df: Optional[pd.DataFrame] = None,
-    ) -> Dict[str, Any]:
-        """Этап 2: дообучение на 12 метриках CVSS v4.0.
+        train_df: pd.DataFrame | None = None,
+    ) -> dict[str, Any]:
+        """Этап 2 — дообучение на 12 метриках CVSS v4.0.
 
         Перед стартом:
-            1. Грузим best_stage1.pt с фильтрацией по форме (strict=False).
-            2. Переинициализируем головы из ``stage2.reinit_heads`` —
-               AT/SC/SI/SA новые, E пересоздаётся, т.к. в v3.1 у неё было
-               5 классов, а в v4.0 — 3.
+
+            1. Грузится ``best_stage1.pt`` с фильтрацией по форме
+               (``strict=False``).
+            2. Переинициализируются головы из ``stage2.reinit_heads`` —
+               ``AT, SC, SI, SA`` новые, ``E`` пересоздаётся (в v3.1 у неё
+               было 5 классов, в v4.0 — 3).
+
+        Args:
+            train_loader: DataLoader на v4.0-подмножестве train (≈4 715 записей).
+            val_loader: DataLoader на v4.0-подмножестве val.
+            train_df: Опциональный train DataFrame для логирования
+                распределения классов.
+
+        Returns:
+            Словарь ``history`` со списками ``train_loss``, ``val_loss`` и
+            ``per_metric_f1`` по эпохам; чекпоинт ``best_stage2.pt``.
         """
         self._load_stage1_weights_if_present(self.models_dir / "best_stage1.pt")
         self._reinit_heads_for_stage2()
@@ -616,7 +611,7 @@ class Trainer:
             path,
         )
 
-    def load_checkpoint(self, path: Path) -> Dict[str, Any]:
+    def load_checkpoint(self, path: Path) -> dict[str, Any]:
         """Восстанавливает model/optimizer/scheduler из чекпоинта.
 
         Returns:

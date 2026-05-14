@@ -20,12 +20,21 @@ def calc() -> CVSSCalculator:
 # Граничные случаи: максимальный и минимальный балл.
 # ---------------------------------------------------------------------------
 
+
 def test_worst_case(calc: CVSSCalculator) -> None:
     """Все impact-метрики High, AV:N, доступ без условий, активная эксплуатация → 10.0."""
     metrics = {
-        "AV": "N", "AC": "L", "AT": "N", "PR": "N", "UI": "N",
-        "VC": "H", "VI": "H", "VA": "H",
-        "SC": "H", "SI": "H", "SA": "H",
+        "AV": "N",
+        "AC": "L",
+        "AT": "N",
+        "PR": "N",
+        "UI": "N",
+        "VC": "H",
+        "VI": "H",
+        "VA": "H",
+        "SC": "H",
+        "SI": "H",
+        "SA": "H",
         "E": "A",
     }
     score, severity, _ = calc.calculate(metrics)
@@ -36,9 +45,17 @@ def test_worst_case(calc: CVSSCalculator) -> None:
 def test_best_case(calc: CVSSCalculator) -> None:
     """Все impact-метрики None, тяжёлый доступ → 0.0."""
     metrics = {
-        "AV": "P", "AC": "H", "AT": "P", "PR": "H", "UI": "A",
-        "VC": "N", "VI": "N", "VA": "N",
-        "SC": "N", "SI": "N", "SA": "N",
+        "AV": "P",
+        "AC": "H",
+        "AT": "P",
+        "PR": "H",
+        "UI": "A",
+        "VC": "N",
+        "VI": "N",
+        "VA": "N",
+        "SC": "N",
+        "SI": "N",
+        "SA": "N",
     }
     score, severity, _ = calc.calculate(metrics)
     assert score == 0.0
@@ -49,13 +66,22 @@ def test_best_case(calc: CVSSCalculator) -> None:
 # Типичные классы уязвимостей.
 # ---------------------------------------------------------------------------
 
+
 def test_xss_typical(calc: CVSSCalculator) -> None:
     """Типичный reflected XSS: сетевая атака, требуется действие пользователя,
     низкий impact на C/I/A. Ожидается Medium (4.0–6.9)."""
     metrics = {
-        "AV": "N", "AC": "L", "AT": "N", "PR": "N", "UI": "A",
-        "VC": "L", "VI": "L", "VA": "N",
-        "SC": "L", "SI": "L", "SA": "N",
+        "AV": "N",
+        "AC": "L",
+        "AT": "N",
+        "PR": "N",
+        "UI": "A",
+        "VC": "L",
+        "VI": "L",
+        "VA": "N",
+        "SC": "L",
+        "SI": "L",
+        "SA": "N",
     }
     score, severity, _ = calc.calculate(metrics)
     assert 4.0 <= score <= 7.0
@@ -66,9 +92,17 @@ def test_sqli_typical(calc: CVSSCalculator) -> None:
     """Типичный SQL injection: сетевая атака, нужны минимальные привилегии,
     высокий impact на уязвимую систему. Ожидается High (7.0–8.9)."""
     metrics = {
-        "AV": "N", "AC": "L", "AT": "N", "PR": "L", "UI": "N",
-        "VC": "H", "VI": "H", "VA": "H",
-        "SC": "N", "SI": "N", "SA": "N",
+        "AV": "N",
+        "AC": "L",
+        "AT": "N",
+        "PR": "L",
+        "UI": "N",
+        "VC": "H",
+        "VI": "H",
+        "VA": "H",
+        "SC": "N",
+        "SI": "N",
+        "SA": "N",
     }
     score, severity, _ = calc.calculate(metrics)
     assert 7.0 <= score <= 9.0
@@ -80,9 +114,17 @@ def test_sqli_typical(calc: CVSSCalculator) -> None:
 # ---------------------------------------------------------------------------
 
 _BASE_FOR_E = {
-    "AV": "N", "AC": "L", "AT": "N", "PR": "N", "UI": "N",
-    "VC": "H", "VI": "H", "VA": "H",
-    "SC": "L", "SI": "L", "SA": "L",
+    "AV": "N",
+    "AC": "L",
+    "AT": "N",
+    "PR": "N",
+    "UI": "N",
+    "VC": "H",
+    "VI": "H",
+    "VA": "H",
+    "SC": "L",
+    "SI": "L",
+    "SA": "L",
 }
 
 
@@ -107,39 +149,58 @@ def test_e_modifier_unreported(calc: CVSSCalculator) -> None:
 # Сериализация / десериализация вектора.
 # ---------------------------------------------------------------------------
 
+
 def test_build_vector_string(calc: CVSSCalculator) -> None:
     metrics = {
-        "AV": "N", "AC": "L", "AT": "N", "PR": "N", "UI": "N",
-        "VC": "H", "VI": "H", "VA": "H",
-        "SC": "N", "SI": "N", "SA": "N",
+        "AV": "N",
+        "AC": "L",
+        "AT": "N",
+        "PR": "N",
+        "UI": "N",
+        "VC": "H",
+        "VI": "H",
+        "VA": "H",
+        "SC": "N",
+        "SI": "N",
+        "SA": "N",
         "E": "A",
     }
-    expected = (
-        "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/"
-        "VC:H/VI:H/VA:H/SC:N/SI:N/SA:N/E:A"
-    )
+    expected = "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/" "VC:H/VI:H/VA:H/SC:N/SI:N/SA:N/E:A"
     assert calc.build_vector_string(metrics) == expected
 
 
 def test_parse_vector_string(calc: CVSSCalculator) -> None:
-    vector = (
-        "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/"
-        "VC:H/VI:H/VA:H/SC:N/SI:N/SA:N/E:A"
-    )
+    vector = "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/" "VC:H/VI:H/VA:H/SC:N/SI:N/SA:N/E:A"
     parsed = calc.parse_vector_string(vector)
     assert parsed == {
-        "AV": "N", "AC": "L", "AT": "N", "PR": "N", "UI": "N",
-        "VC": "H", "VI": "H", "VA": "H",
-        "SC": "N", "SI": "N", "SA": "N",
+        "AV": "N",
+        "AC": "L",
+        "AT": "N",
+        "PR": "N",
+        "UI": "N",
+        "VC": "H",
+        "VI": "H",
+        "VA": "H",
+        "SC": "N",
+        "SI": "N",
+        "SA": "N",
         "E": "A",
     }
 
 
 def test_round_trip(calc: CVSSCalculator) -> None:
     metrics = {
-        "AV": "A", "AC": "H", "AT": "P", "PR": "L", "UI": "P",
-        "VC": "L", "VI": "H", "VA": "N",
-        "SC": "H", "SI": "L", "SA": "N",
+        "AV": "A",
+        "AC": "H",
+        "AT": "P",
+        "PR": "L",
+        "UI": "P",
+        "VC": "L",
+        "VI": "H",
+        "VA": "N",
+        "SC": "H",
+        "SI": "L",
+        "SA": "N",
         "E": "P",
     }
     assert calc.parse_vector_string(calc.build_vector_string(metrics)) == metrics
@@ -149,11 +210,12 @@ def test_round_trip(calc: CVSSCalculator) -> None:
 # Дополнительные инварианты.
 # ---------------------------------------------------------------------------
 
+
 @pytest.mark.parametrize(
     "score, expected",
     [
         (0.0, "None"),
-        (0.1, "Low"),       # граница None/Low — частая ошибка с < vs <=
+        (0.1, "Low"),  # граница None/Low — частая ошибка с < vs <=
         (3.9, "Low"),
         (4.0, "Medium"),
         (6.9, "Medium"),
@@ -239,15 +301,11 @@ FIRST_EXAMPLES = [
 
 
 @pytest.mark.parametrize("vector, expected_score", FIRST_EXAMPLES)
-def test_first_official_examples(
-    calc: CVSSCalculator, vector: str, expected_score: float
-) -> None:
+def test_first_official_examples(calc: CVSSCalculator, vector: str, expected_score: float) -> None:
     """Сравнение с эталонными баллами FIRST для 35 разнотипных векторов."""
     metrics = calc.parse_vector_string(vector)
     score, severity, _ = calc.calculate(metrics)
-    assert score == expected_score, (
-        f"Vector {vector!r}: expected {expected_score}, got {score}"
-    )
+    assert score == expected_score, f"Vector {vector!r}: expected {expected_score}, got {score}"
     # Severity также должен соответствовать таблице FIRST.
     assert severity == calc._score_to_severity(expected_score)
 
@@ -269,7 +327,7 @@ _RANDOM_VALUES = {
     "SC": ["H", "L", "N"],
     "SI": ["H", "L", "N"],
     "SA": ["H", "L", "N"],
-    "E":  ["A", "P", "U", None],  # None → метрика не указана (≡ X)
+    "E": ["A", "P", "U", None],  # None → метрика не указана (≡ X)
 }
 
 
@@ -290,9 +348,10 @@ def test_random_50_match_reference(calc: CVSSCalculator) -> None:
     с обоими баллами для отладки.
     """
     pytest.importorskip("cvss", reason="референсная библиотека cvss не установлена")
-    from cvss import CVSS4 as RefCVSS4  # type: ignore[import-not-found]
-
     import random
+
+    from cvss import CVSS4 as RefCVSS4  # type: ignore[import-not-found]  # noqa: N811
+
     rng = random.Random(42)
 
     diffs = []
@@ -312,6 +371,7 @@ def test_random_50_match_reference(calc: CVSSCalculator) -> None:
 # ---------------------------------------------------------------------------
 # Тесты на корректность парсинга / обработку ошибок.
 # ---------------------------------------------------------------------------
+
 
 def test_parse_invalid_vector(calc: CVSSCalculator) -> None:
     """Полностью невалидная строка → ValueError при попытке расчёта."""
@@ -343,9 +403,17 @@ def test_lowercase_metrics(calc: CVSSCalculator) -> None:
 def test_calculate_returns_correct_types(calc: CVSSCalculator) -> None:
     """Контракт возвращаемого типа: (float, str ∈ {уровни}, str с префиксом CVSS:4.0/)."""
     metrics = {
-        "AV": "N", "AC": "L", "AT": "N", "PR": "N", "UI": "N",
-        "VC": "H", "VI": "H", "VA": "H",
-        "SC": "N", "SI": "N", "SA": "N",
+        "AV": "N",
+        "AC": "L",
+        "AT": "N",
+        "PR": "N",
+        "UI": "N",
+        "VC": "H",
+        "VI": "H",
+        "VA": "H",
+        "SC": "N",
+        "SI": "N",
+        "SA": "N",
         "E": "A",
     }
     result = calc.calculate(metrics)

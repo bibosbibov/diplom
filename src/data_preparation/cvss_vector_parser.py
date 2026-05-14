@@ -8,7 +8,7 @@
 from __future__ import annotations
 
 import re
-from typing import Sequence
+from collections.abc import Sequence
 
 import numpy as np
 
@@ -16,24 +16,32 @@ import numpy as np
 
 #: CVSS v4.0 — все 12 метрик базового вектора + Exploit Maturity (E).
 V4_LABEL_MAPS: dict[str, list[str]] = {
-    "AV": ["N", "A", "L", "P"],          # Network / Adjacent / Local / Physical
-    "AC": ["L", "H"],                    # Low / High
-    "AT": ["N", "P"],                    # None / Present
-    "PR": ["N", "L", "H"],               # None / Low / High
-    "UI": ["N", "P", "A"],               # None / Passive / Active
+    "AV": ["N", "A", "L", "P"],  # Network / Adjacent / Local / Physical
+    "AC": ["L", "H"],  # Low / High
+    "AT": ["N", "P"],  # None / Present
+    "PR": ["N", "L", "H"],  # None / Low / High
+    "UI": ["N", "P", "A"],  # None / Passive / Active
     "VC": ["H", "L", "N"],
     "VI": ["H", "L", "N"],
     "VA": ["H", "L", "N"],
     "SC": ["H", "L", "N"],
     "SI": ["H", "L", "N"],
     "SA": ["H", "L", "N"],
-    "E":  ["A", "P", "U"],               # Attacked / POC / Unreported
+    "E": ["A", "P", "U"],  # Attacked / POC / Unreported
 }
 
 V4_METRIC_ORDER: tuple[str, ...] = (
-    "AV", "AC", "AT", "PR", "UI",
-    "VC", "VI", "VA",
-    "SC", "SI", "SA",
+    "AV",
+    "AC",
+    "AT",
+    "PR",
+    "UI",
+    "VC",
+    "VI",
+    "VA",
+    "SC",
+    "SI",
+    "SA",
     "E",
 )
 
@@ -43,15 +51,22 @@ V3_LABEL_MAPS: dict[str, list[str]] = {
     "AV": ["N", "A", "L", "P"],
     "AC": ["L", "H"],
     "PR": ["N", "L", "H"],
-    "UI": ["N", "R"],                    # None / Required (v3)
-    "VC": ["H", "L", "N"],               # parsed from C:
-    "VI": ["H", "L", "N"],               # parsed from I:
-    "VA": ["H", "L", "N"],               # parsed from A:
-    "E":  ["X", "U", "P", "F", "H"],     # NotDefined / Unproven / POC / Functional / High
+    "UI": ["N", "R"],  # None / Required (v3)
+    "VC": ["H", "L", "N"],  # parsed from C:
+    "VI": ["H", "L", "N"],  # parsed from I:
+    "VA": ["H", "L", "N"],  # parsed from A:
+    "E": ["X", "U", "P", "F", "H"],  # NotDefined / Unproven / POC / Functional / High
 }
 
 V3_METRIC_ORDER: tuple[str, ...] = (
-    "AV", "AC", "PR", "UI", "VC", "VI", "VA", "E",
+    "AV",
+    "AC",
+    "PR",
+    "UI",
+    "VC",
+    "VI",
+    "VA",
+    "E",
 )
 
 #: Sentinel-индекс для CrossEntropyLoss(ignore_index=-100).
@@ -123,7 +138,7 @@ def parse_v3_vector(vector_str: str | None) -> dict[str, str | None]:
         "VC": pairs.get("C"),
         "VI": pairs.get("I"),
         "VA": pairs.get("A"),
-        "E":  pairs.get("E"),
+        "E": pairs.get("E"),
     }
 
 

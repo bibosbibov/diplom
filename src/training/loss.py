@@ -10,8 +10,6 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
-
 import numpy as np
 import torch
 import torch.nn as nn
@@ -36,31 +34,31 @@ class MultiTaskLoss(nn.Module):
 
     def __init__(
         self,
-        active_metrics: List[str],
-        class_weights: Optional[Dict[str, torch.Tensor]] = None,
+        active_metrics: list[str],
+        class_weights: dict[str, torch.Tensor] | None = None,
     ) -> None:
         super().__init__()
         self.active_metrics = list(active_metrics)
         # Регистрируем веса как буферы, чтобы они автоматически переезжали на
         # нужное устройство вместе с модулем (`.to(device)`) и попадали в
         # state_dict для воспроизводимости.
-        self._weight_keys: List[str] = []
+        self._weight_keys: list[str] = []
         if class_weights:
             for name, weights in class_weights.items():
                 buf_name = f"_w_{name}"
                 self.register_buffer(buf_name, weights.float(), persistent=False)
                 self._weight_keys.append(name)
 
-    def _weight_for(self, metric: str) -> Optional[torch.Tensor]:
+    def _weight_for(self, metric: str) -> torch.Tensor | None:
         if metric in self._weight_keys:
             return getattr(self, f"_w_{metric}")
         return None
 
     def forward(
         self,
-        logits: Dict[str, torch.Tensor],
-        labels: Dict[str, torch.Tensor],
-    ) -> Tuple[torch.Tensor, Dict[str, float]]:
+        logits: dict[str, torch.Tensor],
+        labels: dict[str, torch.Tensor],
+    ) -> tuple[torch.Tensor, dict[str, float]]:
         """Считает суммарный лосс и пер-метричную разбивку.
 
         Args:
@@ -74,8 +72,8 @@ class MultiTaskLoss(nn.Module):
             только активные метрики, у которых остался хотя бы один валидный
             пример в батче.
         """
-        per_metric: Dict[str, float] = {}
-        total: Optional[torch.Tensor] = None
+        per_metric: dict[str, float] = {}
+        total: torch.Tensor | None = None
 
         for metric in self.active_metrics:
             if metric not in logits or metric not in labels:

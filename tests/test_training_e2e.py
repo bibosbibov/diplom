@@ -9,22 +9,19 @@ from __future__ import annotations
 
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 import pandas as pd
 import pytest
 import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader
 from transformers import BertConfig, BertModel
 
 from src.data_preparation import CVSSDataset, CWEEncoder, FeaturesEncoder
 from src.model import CVSSModel
-from src.training.early_stopping import EarlyStopping
 from src.training.trainer import Trainer
 from src.training.utils import set_seed
-
 
 # ---------------------------------------------------------------------------
 # Tiny-BERT и фейковый токенизатор: без download HuggingFace.
@@ -57,7 +54,7 @@ class _DummyTokenizer:
         self.max_length = max_length
         self.vocab_size = vocab_size
 
-    def tokenize(self, text: str, max_length: int | None = None) -> Dict[str, list[int]]:
+    def tokenize(self, text: str, max_length: int | None = None) -> dict[str, list[int]]:
         ml = int(max_length or self.max_length)
         text = text or ""
         # CLS + детерминированные id из символов + SEP, паддим нулями.
@@ -102,7 +99,7 @@ _V4_VECTORS = [
 def _make_dummy_dataframe(n_rows: int = 10) -> pd.DataFrame:
     """Синтетический датафрейм со всеми колонками, нужными CVSSDataset."""
     rng = np.random.default_rng(42)
-    rows: List[Dict[str, Any]] = []
+    rows: list[dict[str, Any]] = []
     for i in range(n_rows):
         rows.append(
             {
@@ -125,7 +122,8 @@ def _make_dummy_dataframe(n_rows: int = 10) -> pd.DataFrame:
 # Конфиг для тестов: эпохи и батчи минимальные.
 # ---------------------------------------------------------------------------
 
-def _make_test_config(checkpoints_dir: Path, models_dir: Path, tb_dir: Path) -> Dict[str, Any]:
+
+def _make_test_config(checkpoints_dir: Path, models_dir: Path, tb_dir: Path) -> dict[str, Any]:
     return {
         "seed": 42,
         "stage1": {
@@ -135,8 +133,14 @@ def _make_test_config(checkpoints_dir: Path, models_dir: Path, tb_dir: Path) -> 
             "warmup_ratio": 0.0,
             "metrics": ["AV", "AC", "PR", "UI", "VC", "VI", "VA", "E"],
             "metric_classes": {
-                "AV": 4, "AC": 2, "PR": 3, "UI": 2,
-                "VC": 4, "VI": 4, "VA": 4, "E": 5,
+                "AV": 4,
+                "AC": 2,
+                "PR": 3,
+                "UI": 2,
+                "VC": 4,
+                "VI": 4,
+                "VA": 4,
+                "E": 5,
             },
         },
         "stage2": {
@@ -146,12 +150,32 @@ def _make_test_config(checkpoints_dir: Path, models_dir: Path, tb_dir: Path) -> 
             "warmup_ratio": 0.0,
             "reinit_heads": ["AT", "SC", "SI", "SA", "E"],
             "metrics": [
-                "AV", "AC", "AT", "PR", "UI",
-                "VC", "VI", "VA", "SC", "SI", "SA", "E",
+                "AV",
+                "AC",
+                "AT",
+                "PR",
+                "UI",
+                "VC",
+                "VI",
+                "VA",
+                "SC",
+                "SI",
+                "SA",
+                "E",
             ],
             "metric_classes": {
-                "AV": 4, "AC": 2, "AT": 2, "PR": 3, "UI": 3,
-                "VC": 3, "VI": 3, "VA": 3, "SC": 3, "SI": 3, "SA": 3, "E": 3,
+                "AV": 4,
+                "AC": 2,
+                "AT": 2,
+                "PR": 3,
+                "UI": 3,
+                "VC": 3,
+                "VI": 3,
+                "VA": 3,
+                "SC": 3,
+                "SI": 3,
+                "SA": 3,
+                "E": 3,
             },
         },
         "common": {
@@ -177,6 +201,7 @@ def _make_test_config(checkpoints_dir: Path, models_dir: Path, tb_dir: Path) -> 
 # ---------------------------------------------------------------------------
 # Фикстуры.
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture()
 def setup(tmp_path):
@@ -241,6 +266,7 @@ def _make_loaders(setup: dict, version: str) -> tuple[DataLoader, DataLoader]:
 # Тесты.
 # ---------------------------------------------------------------------------
 
+
 def test_stage1_one_epoch(setup) -> None:
     """Stage1: loss падает, у активных голов есть ненулевые градиенты,
     голова AT (отсутствует на этапе 1) в модели не появилась."""
@@ -255,18 +281,14 @@ def test_stage1_one_epoch(setup) -> None:
     train_losses = history["train_loss"]
     assert len(train_losses) >= 1
     # Финальный loss строго меньше начального — модель учится.
-    assert train_losses[-1] < train_losses[0], (
-        f"loss не упал: {train_losses}"
-    )
+    assert train_losses[-1] < train_losses[0], f"loss не упал: {train_losses}"
 
     # У всех 8 stage1-голов градиенты есть и не нулевые.
     stage1_metrics = config["stage1"]["metrics"]
     for metric in stage1_metrics:
         head = model.heads[metric]
         assert head.weight.grad is not None, f"head {metric}: grad is None"
-        assert head.weight.grad.abs().sum().item() > 0, (
-            f"head {metric}: grad — все нули"
-        )
+        assert head.weight.grad.abs().sum().item() > 0, f"head {metric}: grad — все нули"
 
     # Голова AT (CVSS v4.0-only) в stage1-модели вообще отсутствует.
     assert "AT" not in model.heads
@@ -301,14 +323,24 @@ def test_stage2_reinit_heads(setup) -> None:
     trainer.close()
 
     # 3) Голова E должна теперь иметь 3 выхода (CVSS v4.0), а не 5.
-    assert model_stage2.heads["E"].out_features == 3, (
-        f"head E.out_features = {model_stage2.heads['E'].out_features}, ожидалось 3"
-    )
+    assert (
+        model_stage2.heads["E"].out_features == 3
+    ), f"head E.out_features = {model_stage2.heads['E'].out_features}, ожидалось 3"
 
     # 4) Все 12 v4-голов в модели присутствуют.
     expected_heads = {
-        "AV", "AC", "AT", "PR", "UI",
-        "VC", "VI", "VA", "SC", "SI", "SA", "E",
+        "AV",
+        "AC",
+        "AT",
+        "PR",
+        "UI",
+        "VC",
+        "VI",
+        "VA",
+        "SC",
+        "SI",
+        "SA",
+        "E",
     }
     assert set(model_stage2.heads.keys()) == expected_heads
 
@@ -316,9 +348,7 @@ def test_stage2_reinit_heads(setup) -> None:
     #    (нулевые матрицы означали бы, что reinit не сработал.)
     for metric in ("AT", "SC", "SI", "SA"):
         head = model_stage2.heads[metric]
-        assert head.weight.abs().sum().item() > 0, (
-            f"head {metric}: weights нулевые после reinit"
-        )
+        assert head.weight.abs().sum().item() > 0, f"head {metric}: weights нулевые после reinit"
 
     # 6) E была [5, hidden] до, стала [3, hidden] — формы уже не совпадают,
     #    значит reinit точно произошёл (старые веса нельзя было перенести).
@@ -327,9 +357,7 @@ def test_stage2_reinit_heads(setup) -> None:
     # 7) Train loss упал за 2 эпохи stage2.
     train_losses = history["train_loss"]
     assert len(train_losses) >= 2
-    assert train_losses[-1] < train_losses[0], (
-        f"stage2 loss не упал: {train_losses}"
-    )
+    assert train_losses[-1] < train_losses[0], f"stage2 loss не упал: {train_losses}"
 
 
 def test_early_stopping_triggers(setup, monkeypatch) -> None:
@@ -359,9 +387,9 @@ def test_early_stopping_triggers(setup, monkeypatch) -> None:
 
     # patience=3 + 1 = должны выполниться ровно 5 эпох (1 улучшение vs -inf,
     # затем 4 эпохи без улучшения; на 5-й counter становится 4 > 3 → стоп).
-    assert len(history["train_loss"]) == 5, (
-        f"ожидалось 5 эпох до останова, прошло {len(history['train_loss'])}"
-    )
+    assert (
+        len(history["train_loss"]) == 5
+    ), f"ожидалось 5 эпох до останова, прошло {len(history['train_loss'])}"
     assert history["best_macro_f1"] == pytest.approx(0.5)
 
 
@@ -393,9 +421,7 @@ def test_checkpoint_save_load(setup) -> None:
     with torch.no_grad():
         for p in new_model.parameters():
             p.add_(1.0)
-    assert not torch.allclose(
-        new_model.heads["AV"].weight, model.heads["AV"].weight
-    )
+    assert not torch.allclose(new_model.heads["AV"].weight, model.heads["AV"].weight)
 
     new_trainer = Trainer(config, new_model, device=torch.device("cpu"))
     meta = new_trainer.load_checkpoint(ckpt_path)

@@ -8,7 +8,8 @@ from __future__ import annotations
 import threading
 import time
 from collections import deque
-from typing import Any, Iterator
+from collections.abc import Iterator
+from typing import Any
 
 import requests
 from tenacity import (
@@ -161,9 +162,7 @@ class NVDCollector:
                 break
 
         metrics = cve.get("metrics", {}) or {}
-        cvss_v3_vector = _first_vector(
-            metrics.get("cvssMetricV31") or metrics.get("cvssMetricV30")
-        )
+        cvss_v3_vector = _first_vector(metrics.get("cvssMetricV31") or metrics.get("cvssMetricV30"))
         cvss_v4_vector = _first_vector(metrics.get("cvssMetricV40"))
 
         cpe_list: list[str] = []

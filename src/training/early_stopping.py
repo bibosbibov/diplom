@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Union
 
 import torch
 import torch.nn as nn
 
-PathLike = Union[str, Path]
+PathLike = str | Path
 
 
 class EarlyStopping:

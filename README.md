@@ -1,22 +1,85 @@
-# Система автоматической оценки критичности уязвимостей ПО на основе CVSS v4.0
+# Автоматическая оценка критичности уязвимостей ПО на основе CVSS v4.0
 
-Магистерская ВКР, направление 10.04.01 «Информационная безопасность».
-Система предсказывает 12 метрик базового вектора **CVSS v4.0** по текстовому
-описанию уязвимости (рус./англ.), идентификатору **CWE** и признакам
-эксплуатируемости (**EPSS, CISA KEV, ExploitDB**) с использованием
-трансформерной модели **mBERT** и собственного калькулятора CVSS v4.0.
-
-> Полное описание архитектуры, источников данных, гиперпараметров и связи
-> с разделами отчёта — в [CLAUDE.md](CLAUDE.md).
+Программная система, которая по текстовому описанию уязвимости и идентификатору
+типа уязвимости (CWE) автоматически предсказывает 12 метрик базового вектора
+**CVSS v4.0**, рассчитывает итоговый числовой балл (0,0–10,0) и определяет
+уровень критичности (None / Low / Medium / High / Critical).
 
 ---
 
-## Требования
+## О проекте
 
-- **Python:** 3.10 или новее
-- **ОС:** Windows / Linux / macOS
-- **GPU (опционально):** CUDA 11.8+ для ускорения обучения
-- **Свободное место:** ~10 ГБ (датасеты + чекпоинты mBERT)
+Магистерская ВКР по направлению **10.04.01 «Информационная безопасность»**,
+направленность «Комплексная защита объектов информатизации». Система использует
+трансформерную модель **mBERT** (`bert-base-multilingual-cased`) с
+fusion-слоем для числовых признаков и 12 классификационными головами, обученную
+двухэтапной стратегией — предобучение на 122 тыс. записей CVSS v3.1 и
+дообучение на 4,7 тыс. записей CVSS v4.0. Расчёт итогового балла выполняется
+**собственной реализацией** калькулятора по спецификации FIRST CVSS v4.0
+(без сторонних библиотек).
+
+**Главные достижения на test set (972 v4.0-записи):**
+
+- **Macro-F1 = 0,7090** (среднее по 12 метрикам),
+- **MAE по CVSS-баллу = 1,17** (11,7% шкалы),
+- **Severity Within ±1 = 0,9208** (модель попадает в истинный уровень
+  критичности или соседний в 92% случаев).
+
+---
+
+## Архитектура
+
+Pipeline предсказания «от описания до Severity»:
+
+```
+   ┌──────────────────────────────────────────────┐
+   │  Описание уязвимости (рус./англ.) +          │
+   │  CWE-ID + (опц.) EPSS, KEV, ExploitDB        │
+   └──────────────────────┬───────────────────────┘
+                          ▼
+            ┌───────────────────────────┐
+            │      TextProcessor        │  очистка, выбор языка
+            └─────────────┬─────────────┘
+                          ▼
+            ┌───────────────────────────┐
+            │   CVSSTokenizer (mBERT)   │  input_ids, attention_mask
+            └─────────────┬─────────────┘
+                          │
+   ┌──────────────────────┼──────────────────────┐
+   │                      ▼                      │
+   │           ┌──────────────────────┐          │
+   │           │     mBERT (12L)      │   [CLS] →│
+   │           └──────────┬───────────┘  h_text  │
+   │                      │  (768)               │
+   │                      │                      │
+   │   ┌──────────────────┴──────────────┐       │
+   │   │       Fusion Layer 832→512      │       │
+   │   └──────────────────┬──────────────┘       │
+   │                      ▲                      │
+   │           ┌──────────┴───────────┐          │
+   │           │   Features MLP 67→64 │          │
+   │           └──────────┬───────────┘          │
+   │                      │                      │
+   │   ┌──────────────────┴──────────────┐       │
+   │   │  Concat: CWE-emb (64) + EPSS,   │       │
+   │   │  KEV, exploit (3)   = f_ext(67) │       │
+   │   └─────────────────────────────────┘       │
+   └──────────────────────┬──────────────────────┘
+                          ▼
+            ┌───────────────────────────┐
+            │  12 классификационных     │  AV, AC, AT, PR, UI,
+            │  голов: Linear → softmax  │  VC, VI, VA, SC, SI, SA, E
+            └─────────────┬─────────────┘
+                          ▼
+            ┌───────────────────────────┐
+            │     CVSSCalculator        │  MacroVector + interpolation
+            │  (своя реализация v4.0)   │  + Exploit Maturity модификатор
+            └─────────────┬─────────────┘
+                          ▼
+            CVSS-вектор + Score (0–10) + Severity
+```
+
+Подробнее — [docs/architecture.md](docs/architecture.md).
 
 ---
 
@@ -24,115 +87,132 @@
 
 ```bash
 # 1. Клонировать репозиторий
-git clone <repo-url> diplom
+git clone https://github.com/bibosbibov/diplom.git
 cd diplom
 
-# 2. Создать и активировать виртуальное окружение
+# 2. Создать и активировать виртуальное окружение (Python 3.10+)
 python -m venv .venv
-
-# Linux / macOS
+# Linux / macOS:
 source .venv/bin/activate
-# Windows (PowerShell)
+# Windows (PowerShell):
 .venv\Scripts\Activate.ps1
 
 # 3. Установить зависимости
 pip install --upgrade pip
 pip install -r requirements.txt
 
-# 4. Скопировать шаблон переменных окружения
+# 4. Скопировать шаблон переменных окружения и заполнить ключи
 cp .env.example .env
-# и заполнить NVD_API_KEY, при необходимости остальные переменные
 ```
+
+Минимальные требования: **Python 3.10+**, ~10 ГБ свободного диска (датасеты +
+веса mBERT). GPU не обязателен для инференса (модель работает на CPU за
+~200 мс на запрос).
 
 ---
 
-## Конфигурация
+## Использование
 
-Все гиперпараметры, пути и URL источников вынесены в [configs/config.yaml](configs/config.yaml).
-Секреты — только через переменные окружения (`.env`).
+### 1. Python API
 
-| Файл | Назначение |
-|------|------------|
-| `configs/config.yaml` | Гиперпараметры, пути, URL API |
-| `.env` | API-ключи, уровни логирования (не коммитится) |
-| `.env.example` | Шаблон переменных окружения |
+```python
+from src.inference import VulnerabilityPredictor
 
----
+predictor = VulnerabilityPredictor(
+    model_path="models/final_model.pt",
+    device="auto",
+)
 
-## Запуск пайплайна
+result = predictor.predict(
+    description="SQL injection in the login form allows authentication bypass",
+    cwe_id="CWE-89",
+    epss=0.42,            # опционально
+    kev=False,            # опционально
+    exploit=True,         # опционально
+)
 
-### 1. Сбор данных
-
-```bash
-# Загрузка из БДУ ФСТЭК, NVD, EPSS, CISA KEV, ExploitDB
-python -m src.data_collection.collect --config configs/config.yaml
+print(result["vector"])    # CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/...
+print(result["score"])     # 6.9
+print(result["severity"])  # Medium
+print(result["low_confidence_metrics"])  # ['PR', 'UI']
 ```
 
-### 2. Подготовка данных
+### 2. CLI
 
 ```bash
-# Токенизация, кодирование CWE, формирование train/val/test
-python -m src.data_preparation.prepare --config configs/config.yaml
+# Одиночное предсказание
+python -m src.inference.cli predict \
+    --description "Buffer overflow in image parser..." \
+    --cwe CWE-787
+
+# Пакетная обработка CSV
+python -m src.inference.cli batch-predict input.csv output.csv
+
+# Оценка модели на test parquet
+python -m src.inference.cli evaluate data/processed/test.parquet --limit 100
 ```
 
-### 3. Обучение модели (двухэтапное)
+### 3. Веб-сервис (FastAPI)
 
 ```bash
-# Этап 1 — предобучение на CVSS v3.1 (8 общих метрик)
-python -m src.training.train --config configs/config.yaml --stage 1
-
-# Этап 2 — дообучение на CVSS v4.0 (все 12 метрик)
-python -m src.training.train --config configs/config.yaml --stage 2
-```
-
-### 4. Оценка качества
-
-```bash
-python -m src.evaluation.evaluate --config configs/config.yaml \
-    --checkpoint models/checkpoints/stage2_best.pt
-```
-
-### 5. Inference (одиночное предсказание)
-
-```bash
-python -m src.inference.predict --config configs/config.yaml \
-    --description "Описание уязвимости..." --cwe CWE-79
-```
-
-### 6. Запуск веб-сервиса
-
-```bash
-uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn src.api.main:app --host 0.0.0.0 --port 8000
 ```
 
 После запуска:
-- Swagger UI: <http://localhost:8000/docs>
-- ReDoc: <http://localhost:8000/redoc>
+
+- <http://localhost:8000> — веб-интерфейс с формой;
+- <http://localhost:8000/docs> — Swagger UI;
+- <http://localhost:8000/health> — статус сервиса.
+
+Пример запроса:
+
+```bash
+curl -X POST http://localhost:8000/predict \
+  -H "Content-Type: application/json" \
+  -d '{"description": "SQL injection in login form allows auth bypass",
+       "cwe_id": "CWE-89"}'
+```
+
+Полная документация REST API — [docs/api.md](docs/api.md). Руководство для
+инженера по ИБ — [docs/user_guide.md](docs/user_guide.md).
 
 ---
 
-## Тесты
+## Где взять модель
 
-```bash
-# Запуск всех тестов с покрытием
-pytest --cov=src --cov-report=html tests/
+Готовый чекпоинт `models/final_model.pt` (440 МБ, FP32) распространяется
+отдельно из-за размера. Варианты получения:
 
-# Только конкретный модуль
-pytest tests/test_cvss_calculator.py -v
-```
+1. **Релизы GitHub:** скачать
+   `final_model.pt` со страницы
+   <https://github.com/bibosbibov/diplom/releases/latest>
+   и положить в `models/final_model.pt`.
+2. **Обучить самостоятельно** по инструкции [docs/training.md](docs/training.md).
+   Время обучения на Tesla T4: ~4–5 ч на Stage 1 + ~1 ч на Stage 2.
 
-Отчёт о покрытии — `htmlcov/index.html`.
+Дополнительно потребуется `data/processed/cwe_vocab.json` — словарь
+CWE → индекс, полученный на этапе подготовки данных.
 
 ---
 
-## Качество кода
+## Результаты
 
-```bash
-black --line-length 100 src tests
-isort src tests
-pylint src
-mypy src
-```
+Оценка проведена на отложенной тестовой выборке (972 записи с валидным
+CVSS v4.0). Подробный разбор — [reports/CHAPTER3_DRAFT.md](reports/CHAPTER3_DRAFT.md).
+
+| Показатель | Значение |
+|:--|:--|
+| Macro-F1 (12 метрик) | **0,7090** |
+| Vector Accuracy (11 метрик) | 0,3992 |
+| Среднее число правильных метрик | 9,39 / 11 (85,4%) |
+| MAE по CVSS-баллу | **1,17** (11,7% шкалы 0–10) |
+| RMSE по CVSS-баллу | 1,98 |
+| Severity Accuracy | 0,6739 |
+| **Severity Within ±1** | **0,9208** |
+| Размер test set | 972 записи CVSS v4.0 |
+
+Стабильность val → test: среднее абсолютное отклонение |Δ| F1 = 0,016 — нет
+переобучения.
 
 ---
 
@@ -141,42 +221,83 @@ mypy src
 ```
 diplom/
 ├── src/
-│   ├── data_collection/    # Сбор из БДУ, NVD, EPSS, KEV, ExploitDB
-│   ├── data_preparation/   # Токенизация, кодирование CWE, числовые признаки
-│   ├── model/              # Архитектура mBERT + MLP + Fusion + 12 голов
-│   ├── training/           # Двухэтапное обучение
-│   ├── cvss_calculator/    # Собственная реализация CVSS v4.0
-│   ├── evaluation/         # Метрики, k-fold CV
-│   ├── inference/          # End-to-end pipeline предсказания
-│   └── api/                # FastAPI веб-сервис
-├── tests/                  # pytest-тесты
-├── data/{raw,processed}/   # Сырые и подготовленные данные
-├── models/checkpoints/     # Чекпоинты обучения
-├── reports/figures/        # Графики 300 dpi для ВКР
-├── notebooks/              # Эксперименты в Jupyter
-├── configs/config.yaml     # Гиперпараметры и пути
-├── docs/                   # Техническая документация
-├── logs/                   # Логи сбора и обучения
-└── presentation/           # Материалы для защиты
+│   ├── data_collection/       # Сбор из БДУ ФСТЭК, NVD, EPSS, KEV, ExploitDB
+│   ├── data_preparation/      # Токенизация, кодирование CWE, числовые признаки
+│   ├── model/                 # Архитектура нейросети (mBERT + Fusion + 12 голов)
+│   ├── training/              # Двухэтапное обучение, MultiTaskLoss, Trainer
+│   ├── cvss_calculator/       # Собственная реализация алгоритма CVSS v4.0
+│   ├── evaluation/            # Метрики качества, k-fold CV
+│   ├── inference/             # End-to-end pipeline предсказания + CLI
+│   └── api/                   # FastAPI веб-сервис (REST + статический UI)
+├── tests/                     # pytest-тесты (≥70% покрытие)
+├── data/
+│   ├── raw/                   # Сырые выгрузки из API
+│   └── processed/             # train/val/test.parquet, cwe_vocab.json
+├── models/                    # Сохранённые чекпоинты (final_model.pt)
+├── reports/                   # Метрики, графики, таблицы для главы 3 ВКР
+│   ├── figures/               # PNG 300 dpi для ВКР
+│   ├── error_analysis/        # Анализ ошибок, per-CWE метрики
+│   └── *.md                   # Сводные таблицы для копирования в LaTeX/Word
+├── notebooks/                 # 09 — датасет, 10 — анализ ошибок, 11 — итоги
+├── configs/                   # train.yaml, config.yaml
+├── docs/                      # Техническая документация (см. ниже)
+├── logs/                      # Логи сбора и обучения, TensorBoard events
+├── scripts/                   # Вспомогательные скрипты
+├── CLAUDE.md                  # Паспорт проекта (фиксирует все технические решения)
+├── README.md                  # Этот файл
+├── LICENSE                    # MIT
+├── CITATION.cff               # Цитирование
+└── requirements.txt
 ```
 
 ---
 
-## Источники данных
+## Документация
 
-| Источник | URL |
-|----------|-----|
-| БДУ ФСТЭК России | <https://bdu.fstec.ru/> |
-| NVD API 2.0 | <https://services.nvd.nist.gov/rest/json/cves/2.0> |
-| EPSS API | <https://api.first.org/data/v1/epss> |
-| CISA KEV | <https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json> |
-| ExploitDB | <https://github.com/offensive-security/exploitdb> |
-| CWE MITRE | <https://cwe.mitre.org/data/xml/cwec_latest.xml.zip> |
-| Спецификация CVSS v4.0 | <https://www.first.org/cvss/v4.0/specification-document> |
+Развёрнутая документация — в каталоге [docs/](docs/):
+
+| Документ | Назначение |
+|:--|:--|
+| [docs/architecture.md](docs/architecture.md) | Архитектура системы, обоснование решений |
+| [docs/user_guide.md](docs/user_guide.md) | Руководство для инженера по ИБ |
+| [docs/api.md](docs/api.md) | Полное описание REST API |
+| [docs/training.md](docs/training.md) | Как обучить модель самостоятельно |
+
+Паспорт проекта со всеми обязательными техническими решениями —
+[CLAUDE.md](CLAUDE.md).
+
+---
+
+## Скриншоты
+
+Скриншоты веб-интерфейса и Swagger UI:
+
+- ![Веб-интерфейс](docs/screenshots/web_ui.png) — главная страница демо
+- ![Результат предсказания](docs/screenshots/prediction_result.png) — отображение CVSS-вектора и severity
+- ![Swagger UI](docs/screenshots/swagger_ui.png) — интерактивная документация API
+
+*(Файлы заполняются перед защитой ВКР.)*
 
 ---
 
 ## Лицензия
 
-Учебный проект (магистерская ВКР). Использование в коммерческих целях
-не предусмотрено.
+Распространяется под лицензией [MIT](LICENSE). Использование, модификация и
+коммерческое применение разрешены при сохранении уведомления об авторстве.
+
+---
+
+## Цитирование
+
+При использовании результатов работы в академических публикациях, пожалуйста,
+цитируйте репозиторий — формат CFF приведён в [CITATION.cff](CITATION.cff).
+
+---
+
+## Автор
+
+**Артём (@bibosbibov)** — магистрант ФГБОУ ВО «Южно-Российский государственный
+политехнический университет (НПИ) имени М. И. Платова», кафедра
+«Информационная безопасность».
+
+Связь: <https://github.com/bibosbibov>

@@ -6,9 +6,7 @@
 from __future__ import annotations
 
 import json
-import re
 from io import BytesIO
-from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -21,7 +19,6 @@ from src.data_collection.exploitdb_collector import ExploitDBCollector
 from src.data_collection.kev_collector import KEVCollector
 from src.data_collection.nvd_collector import NVDCollector, _SlidingWindowRateLimiter
 from src.data_collection.split_data import split_dataset
-
 
 # --------------------------------------------------------------------------- NVD
 
@@ -56,9 +53,7 @@ def _nvd_payload(cve_id: str = "CVE-2021-44228") -> dict:
                             }
                         ],
                     },
-                    "weaknesses": [
-                        {"description": [{"lang": "en", "value": "CWE-502"}]}
-                    ],
+                    "weaknesses": [{"description": [{"lang": "en", "value": "CWE-502"}]}],
                     "configurations": [
                         {
                             "nodes": [
@@ -246,9 +241,7 @@ def test_bdu_collector_parses_xlsx(tmp_path):
         "https://bdu.fstec.ru/files/documents/vullist.xlsx",
         body=xlsx_bytes,
         status=200,
-        content_type=(
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        ),
+        content_type=("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
     )
 
     collector = BDUCollector(cache_dir=tmp_path)
@@ -271,10 +264,10 @@ def test_bdu_collector_parses_xml(tmp_path):
         "    <identifier>BDU:2024-00500</identifier>"
         "    <name>Уязвимость A</name>"
         "    <description>Уязвимость связана с переполнением буфера</description>"
-        '    <cwes><cwe><identifier>CWE-119</identifier><name>Переполнение буфера</name></cwe></cwes>'
-        '    <identifiers>'
+        "    <cwes><cwe><identifier>CWE-119</identifier><name>Переполнение буфера</name></cwe></cwes>"
+        "    <identifiers>"
         '      <identifier type="CVE" link="https://nvd.nist.gov/vuln/detail/CVE-2024-1234">CVE-2024-1234</identifier>'
-        '    </identifiers>'
+        "    </identifiers>"
         '    <cvss><vector score="7.5">AV:N/AC:L/Au:N/C:P/I:P/A:P</vector></cvss>'
         '    <cvss3><vector score="9.8">AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H</vector></cvss3>'
         '    <cvss4><vector score="0"></vector></cvss4>'  # placeholder, должен пропуститься
@@ -282,7 +275,7 @@ def test_bdu_collector_parses_xml(tmp_path):
         "  <vul>"
         "    <identifier>BDU:2024-00501</identifier>"
         "    <description>Другая уязвимость</description>"
-        '    <cwes><cwe><identifier>CWE-89</identifier></cwe></cwes>'
+        "    <cwes><cwe><identifier>CWE-89</identifier></cwe></cwes>"
         '    <identifiers><identifier type="CVE">CVE-2024-9999</identifier></identifiers>'
         '    <cvss3><vector score="6.5">AV:N/AC:L/PR:L/UI:N/S:U/C:L/I:L/A:N</vector></cvss3>'
         '    <cvss4><vector score="8.7">AV:N/AC:L/AT:N/PR:L/UI:N/VC:H/VI:H/VA:H/SC:N/SI:N/SA:N</vector></cvss4>'
@@ -330,11 +323,11 @@ def test_cwe_names_parses_zip(tmp_path):
     xml = (
         '<?xml version="1.0" encoding="UTF-8"?>'
         '<Weakness_Catalog xmlns="http://cwe.mitre.org/cwe-7">'
-        '  <Weaknesses>'
+        "  <Weaknesses>"
         '    <Weakness ID="79" Name="Improper Neutralization of Input During Web Page Generation"/>'
         '    <Weakness ID="89" Name="SQL Injection"/>'
-        '  </Weaknesses>'
-        '</Weakness_Catalog>'
+        "  </Weaknesses>"
+        "</Weakness_Catalog>"
     )
     zip_buf = BytesIO()
     with zipfile.ZipFile(zip_buf, "w") as zf:

@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 from collections import OrderedDict
-from typing import Mapping
+from collections.abc import Mapping
 
 import torch
 from torch import nn
@@ -28,7 +28,7 @@ DEFAULT_METRIC_CLASSES: dict[str, int] = OrderedDict(
         ("SC", 3),  # H, L, N
         ("SI", 3),  # H, L, N
         ("SA", 3),  # H, L, N
-        ("E",  3),  # A, P, U
+        ("E", 3),  # A, P, U
     ]
 )
 

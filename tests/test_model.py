@@ -21,7 +21,6 @@ from src.model import (
     FusionLayer,
 )
 
-
 # -------------------------------------------------------------- fake transformer
 
 
@@ -70,10 +69,11 @@ def test_features_mlp_padding_idx_zero_grad():
 
 
 def test_features_mlp_internal_layout():
-    mlp = FeaturesMLP(num_cwe=50, num_features=3, cwe_embedding_dim=64,
-                      hidden_dim=128, output_dim=64)
+    mlp = FeaturesMLP(
+        num_cwe=50, num_features=3, cwe_embedding_dim=64, hidden_dim=128, output_dim=64
+    )
     layers = [m for m in mlp.net if isinstance(m, nn.Linear)]
-    assert layers[0].in_features == 67   # 3 + 64
+    assert layers[0].in_features == 67  # 3 + 64
     assert layers[0].out_features == 128
     assert layers[1].in_features == 128
     assert layers[1].out_features == 64
@@ -92,7 +92,7 @@ def test_fusion_layer_output_shape():
 
 def test_fusion_layer_internal_dims():
     fusion = FusionLayer()
-    assert fusion.proj.in_features == 832    # 768 + 64
+    assert fusion.proj.in_features == 832  # 768 + 64
     assert fusion.proj.out_features == 512
     assert isinstance(fusion.dropout, nn.Dropout)
     assert fusion.dropout.p == pytest.approx(0.1)
@@ -123,10 +123,7 @@ def test_classification_heads_returns_all_metrics():
 
 def test_classification_heads_metric_order_preserved():
     heads = ClassificationHeads()
-    expected_order = ("AV", "AC", "AT", "PR", "UI",
-                      "VC", "VI", "VA",
-                      "SC", "SI", "SA",
-                      "E")
+    expected_order = ("AV", "AC", "AT", "PR", "UI", "VC", "VI", "VA", "SC", "SI", "SA", "E")
     assert heads.metric_order == expected_order
 
 
@@ -197,8 +194,7 @@ def test_cvss_model_backward_runs_without_error():
     features = torch.randn(2, 3)
 
     logits = model(input_ids, attention_mask, cwe_idx, features)
-    loss = sum(F.cross_entropy(l, torch.zeros(2, dtype=torch.long))
-               for l in logits.values())
+    loss = sum(F.cross_entropy(t, torch.zeros(2, dtype=torch.long)) for t in logits.values())
     loss.backward()
 
     # MLP-голова первой метрики должна получить градиент

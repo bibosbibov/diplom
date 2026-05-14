@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>CVSS v4.0 — Автоматическая оценка критичности уязвимостей</title>
+  <style>
+    :root {
+      --primary: #1e3a8a;
+      --primary-dark: #1e2c66;
+      --accent: #2563eb;
+      --bg: #f6f8fb;
+      --card: #ffffff;
+      --border: #e5e7eb;
+      --text: #111827;
+      --muted: #6b7280;
+      --green: #10b981;
+      --yellow: #f59e0b;
+      --red: #ef4444;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+    }
+    header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+      color: white;
+      padding: 32px 24px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    header h1 {
+      margin: 0 0 6px 0;
+      font-size: 24px;
+      font-weight: 600;
+    }
+    header .subtitle {
+      margin: 0;
+      opacity: 0.85;
+      font-size: 14px;
+    }
+    main {
+      max-width: 960px;
+      margin: 24px auto;
+      padding: 0 16px 48px 16px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+    .card h2 {
+      margin: 0 0 16px 0;
+      font-size: 18px;
+      color: var(--primary-dark);
+    }
+    label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    textarea, select, input[type="text"], input[type="number"] {
+      width: 100%;
+      padding: 10px 12px;
+      font-size: 14px;
+      font-family: inherit;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--text);
+    }
+    textarea:focus, select:focus, input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+    }
+    textarea { resize: vertical; min-height: 110px; }
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .form-group { margin-bottom: 16px; }
+    .extras {
+      display: grid;
+      grid-template-columns: 2fr 1fr 1fr;
+      gap: 16px;
+      align-items: end;
+      margin-top: 16px;
+    }
+    .extras label.checkbox {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 10px 0;
+    }
+    .extras input[type="checkbox"] { width: 18px; height: 18px; }
+    .slider-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .slider-wrap input[type="range"] { flex: 1; }
+    .slider-wrap .val {
+      font-variant-numeric: tabular-nums;
+      min-width: 42px;
+      text-align: right;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    button.primary {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 15px;
+      font-weight: 600;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    button.primary:hover { background: #1d4ed8; }
+    button.primary:disabled { background: #93c5fd; cursor: not-allowed; }
+    button.secondary {
+      background: #fff;
+      color: var(--primary);
+      border: 1px solid var(--border);
+      padding: 6px 10px;
+      font-size: 12px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button.secondary:hover { background: #f3f4f6; }
+    .loader {
+      display: none;
+      text-align: center;
+      padding: 32px 0;
+      color: var(--muted);
+    }
+    .loader.visible { display: block; }
+    .spinner {
+      width: 28px; height: 28px;
+      border: 3px solid #e5e7eb;
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 8px auto;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    #result { display: none; }
+    #result.visible { display: block; }
+    .severity-badge {
+      padding: 18px 24px;
+      border-radius: 10px;
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 18px;
+    }
+    .severity-badge .label {
+      font-size: 14px;
+      opacity: 0.85;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .severity-badge .severity {
+      font-size: 28px;
+      font-weight: 700;
+      margin-top: 4px;
+    }
+    .severity-badge .score {
+      font-size: 48px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+    .sev-Critical { background: #dc3545; }
+    .sev-High     { background: #fd7e14; }
+    .sev-Medium   { background: #ffc107; color: #1f2937; }
+    .sev-Low      { background: #28a745; }
+    .sev-None     { background: #6c757d; }
+    .vector-block {
+      background: #f3f4f6;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 14px;
+      margin-bottom: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .vector-block code {
+      font-family: "Consolas", "Menlo", "Courier New", monospace;
+      font-size: 13px;
+      color: var(--primary-dark);
+      word-break: break-all;
+    }
+    table.metrics {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    table.metrics th, table.metrics td {
+      padding: 8px 10px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    table.metrics th {
+      background: #f9fafb;
+      font-weight: 600;
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .conf-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 12px;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
+    .conf-high { background: #d1fae5; color: #065f46; }
+    .conf-mid  { background: #fef3c7; color: #92400e; }
+    .conf-low  { background: #fee2e2; color: #991b1b; }
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 16px;
+    }
+    .toast {
+      position: fixed;
+      top: 24px;
+      right: 24px;
+      background: var(--red);
+      color: white;
+      padding: 12px 18px;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+      opacity: 0;
+      transform: translateY(-8px);
+      transition: opacity 0.2s, transform 0.2s;
+      pointer-events: none;
+      max-width: 360px;
+    }
+    .toast.visible {
+      opacity: 1;
+      transform: translateY(0);
+      pointer-events: auto;
+    }
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      padding: 24px 16px 32px 16px;
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+    @media (max-width: 640px) {
+      .form-row, .extras { grid-template-columns: 1fr; }
+      header h1 { font-size: 20px; }
+      .severity-badge { flex-direction: column; align-items: flex-start; gap: 8px; }
+      .severity-badge .score { font-size: 36px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Автоматическая оценка критичности уязвимостей по CVSS v4.0</h1>
+  </header>
+
+  <main>
+    <section class="card">
+      <h2>Параметры уязвимости</h2>
+      <form id="predict-form">
+        <div class="form-group">
+          <label for="description">Описание уязвимости</label>
+          <textarea
+            id="description"
+            name="description"
+            placeholder="SQL injection in login form allows authentication bypass via crafted POST request..."
+            required
+            minlength="10"
+            maxlength="10000"
+          >SQL injection vulnerability in the login form allows remote attackers to bypass authentication and access the admin panel via crafted POST requests with malicious payloads in the username parameter.</textarea>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="cwe_id">Тип уязвимости (CWE)</label>
+            <select id="cwe_id" name="cwe_id" required>
+              <option value="CWE-79">CWE-79 — Cross-site Scripting (XSS)</option>
+              <option value="CWE-89" selected>CWE-89 — SQL Injection</option>
+              <option value="CWE-787">CWE-787 — Out-of-bounds Write</option>
+              <option value="CWE-22">CWE-22 — Path Traversal</option>
+              <option value="CWE-352">CWE-352 — Cross-Site Request Forgery (CSRF)</option>
+              <option value="CWE-78">CWE-78 — OS Command Injection</option>
+              <option value="CWE-94">CWE-94 — Code Injection</option>
+              <option value="CWE-119">CWE-119 — Buffer Overflow</option>
+              <option value="CWE-200">CWE-200 — Information Disclosure</option>
+              <option value="CWE-287">CWE-287 — Authentication Bypass</option>
+              <option value="CWE-862">CWE-862 — Missing Authorization</option>
+              <option value="CWE-918">CWE-918 — Server-Side Request Forgery (SSRF)</option>
+              <option value="CWE-269">CWE-269 — Improper Privilege Management</option>
+              <option value="CWE-502">CWE-502 — Deserialization of Untrusted Data</option>
+              <option value="CWE-77">CWE-77 — Command Injection</option>
+              <option value="CWE-125">CWE-125 — Out-of-bounds Read</option>
+              <option value="CWE-416">CWE-416 — Use After Free</option>
+              <option value="CWE-190">CWE-190 — Integer Overflow</option>
+              <option value="CWE-863">CWE-863 — Incorrect Authorization</option>
+              <option value="CWE-732">CWE-732 — Incorrect Permission Assignment</option>
+              <option value="CWE-20">CWE-20 — Improper Input Validation</option>
+              <option value="CWE-434">CWE-434 — Unrestricted File Upload</option>
+              <option value="CWE-400">CWE-400 — Uncontrolled Resource Consumption</option>
+              <option value="CWE-611">CWE-611 — XML External Entity (XXE)</option>
+              <option value="CWE-601">CWE-601 — Open Redirect</option>
+              <option value="CWE-798">CWE-798 — Hardcoded Credentials</option>
+              <option value="CWE-522">CWE-522 — Insufficiently Protected Credentials</option>
+              <option value="CWE-639">CWE-639 — Authorization Bypass Through User-Controlled Key</option>
+              <option value="CWE-754">CWE-754 — Improper Check for Unusual Conditions</option>
+              <option value="CWE-264">CWE-264 — Permissions, Privileges, and Access Controls</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="epss">EPSS (вероятность эксплуатации)</label>
+            <div class="slider-wrap">
+              <input type="range" id="epss" name="epss" min="0" max="1" step="0.01" value="0" />
+              <span class="val" id="epss-val">—</span>
+              <button type="button" class="secondary" id="epss-clear" title="Очистить">∅</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="extras">
+          <div>
+            <label class="checkbox">
+              <input type="checkbox" id="kev" />
+              CISA KEV (подтверждённая эксплуатация)
+            </label>
+            <label class="checkbox">
+              <input type="checkbox" id="exploit" />
+              Публичный эксплойт (ExploitDB)
+            </label>
+          </div>
+          <div></div>
+          <div>
+            <button type="submit" class="primary" id="submit-btn">Оценить</button>
+          </div>
+        </div>
+      </form>
+    </section>
+
+    <div class="loader" id="loader">
+      <div class="spinner"></div>
+      <div>Модель обрабатывает запрос…</div>
+    </div>
+
+    <section class="card" id="result">
+      <h2>Результат оценки</h2>
+      <div class="severity-badge" id="severity-badge">
+        <div>
+          <div class="label">Уровень критичности</div>
+          <div class="severity" id="severity-text">—</div>
+        </div>
+        <div class="score" id="score-text">—</div>
+      </div>
+
+      <div class="vector-block">
+        <code id="vector-text">—</code>
+        <button type="button" class="secondary" id="copy-btn">Скопировать</button>
+      </div>
+
+      <table class="metrics">
+        <thead>
+          <tr>
+            <th>Метрика</th>
+            <th>Значение</th>
+            <th>Уверенность</th>
+          </tr>
+        </thead>
+        <tbody id="metrics-tbody"></tbody>
+      </table>
+
+      <div class="meta-row">
+        <span id="lowconf-text"></span>
+        <span id="inftime-text"></span>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    Магистерская ВКР · 10.04.01 «Информационная безопасность»
+  </footer>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const METRIC_LABELS = {
+      AV: "Attack Vector",
+      AC: "Attack Complexity",
+      AT: "Attack Requirements",
+      PR: "Privileges Required",
+      UI: "User Interaction",
+      VC: "Vulnerable System Confidentiality",
+      VI: "Vulnerable System Integrity",
+      VA: "Vulnerable System Availability",
+      SC: "Subsequent System Confidentiality",
+      SI: "Subsequent System Integrity",
+      SA: "Subsequent System Availability",
+      E:  "Exploit Maturity",
+    };
+    const METRIC_ORDER = ["AV","AC","AT","PR","UI","VC","VI","VA","SC","SI","SA","E"];
+
+    const $ = (sel) => document.querySelector(sel);
+    const form = $("#predict-form");
+    const loader = $("#loader");
+    const resultEl = $("#result");
+    const submitBtn = $("#submit-btn");
+
+    const epssInput = $("#epss");
+    const epssVal = $("#epss-val");
+    let epssEnabled = false;
+    epssInput.addEventListener("input", () => {
+      epssEnabled = true;
+      epssVal.textContent = Number(epssInput.value).toFixed(2);
+    });
+    $("#epss-clear").addEventListener("click", () => {
+      epssEnabled = false;
+      epssInput.value = 0;
+      epssVal.textContent = "—";
+    });
+
+    function showToast(message) {
+      const t = $("#toast");
+      t.textContent = message;
+      t.classList.add("visible");
+      setTimeout(() => t.classList.remove("visible"), 4000);
+    }
+
+    function confClass(c) {
+      if (c >= 0.8) return "conf-high";
+      if (c >= 0.5) return "conf-mid";
+      return "conf-low";
+    }
+
+    function renderResult(data) {
+      const badge = $("#severity-badge");
+      badge.className = "severity-badge sev-" + data.severity;
+      $("#severity-text").textContent = data.severity;
+      $("#score-text").textContent = data.score.toFixed(1);
+      $("#vector-text").textContent = data.vector;
+
+      const tbody = $("#metrics-tbody");
+      tbody.innerHTML = "";
+      for (const key of METRIC_ORDER) {
+        const m = data.metrics[key];
+        if (!m) continue;
+        const tr = document.createElement("tr");
+        const conf = Number(m.confidence);
+        tr.innerHTML =
+          `<td><strong>${key}</strong> <span style="color:var(--muted);font-size:12px">${METRIC_LABELS[key] || ""}</span></td>` +
+          `<td><code style="font-family:Consolas,monospace">${m.value}</code></td>` +
+          `<td><span class="conf-pill ${confClass(conf)}">${(conf*100).toFixed(1)}%</span></td>`;
+        tbody.appendChild(tr);
+      }
+
+      const lc = data.low_confidence_metrics || [];
+      $("#lowconf-text").textContent = lc.length
+        ? "Низкая уверенность: " + lc.join(", ")
+        : "Все метрики предсказаны с достаточной уверенностью";
+      $("#inftime-text").textContent = "Время инференса: " + data.inference_time_ms.toFixed(1) + " мс";
+
+      resultEl.classList.add("visible");
+    }
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const description = $("#description").value.trim();
+      const cwe_id = $("#cwe_id").value;
+      const kev = $("#kev").checked;
+      const exploit = $("#exploit").checked;
+      const payload = {
+        description,
+        cwe_id,
+        kev: kev ? true : null,
+        exploit: exploit ? true : null,
+        epss: epssEnabled ? Number(epssInput.value) : null,
+      };
+
+      submitBtn.disabled = true;
+      resultEl.classList.remove("visible");
+      loader.classList.add("visible");
+      try {
+        const response = await fetch("/predict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+          const text = await response.text();
+          let msg = "HTTP " + response.status;
+          try {
+            const j = JSON.parse(text);
+            if (j.detail) {
+              msg = typeof j.detail === "string" ? j.detail : JSON.stringify(j.detail);
+            }
+          } catch (_) { msg = text || msg; }
+          throw new Error(msg);
+        }
+        const data = await response.json();
+        renderResult(data);
+      } catch (err) {
+        showToast("Ошибка: " + err.message);
+      } finally {
+        loader.classList.remove("visible");
+        submitBtn.disabled = false;
+      }
+    });
+
+    $("#copy-btn").addEventListener("click", async () => {
+      const vec = $("#vector-text").textContent;
+      try {
+        await navigator.clipboard.writeText(vec);
+        $("#copy-btn").textContent = "Скопировано";
+        setTimeout(() => { $("#copy-btn").textContent = "Скопировать"; }, 1500);
+      } catch (_) {
+        showToast("Не удалось скопировать вектор");
+      }
+    });
+  </script>
+</body>
+</html>

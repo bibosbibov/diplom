@@ -8,8 +8,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Iterable
 
 
 class CWEEncoder:
@@ -21,11 +21,14 @@ class CWEEncoder:
     UNK_INDEX = 1
 
     def __init__(self) -> None:
-        self._vocab: dict[str, int] = {self.PAD_TOKEN: self.PAD_INDEX, self.UNK_TOKEN: self.UNK_INDEX}
+        self._vocab: dict[str, int] = {
+            self.PAD_TOKEN: self.PAD_INDEX,
+            self.UNK_TOKEN: self.UNK_INDEX,
+        }
 
     # ----------------------------------------------------------------- public
 
-    def fit(self, cwe_list: Iterable[str | None]) -> "CWEEncoder":
+    def fit(self, cwe_list: Iterable[str | None]) -> CWEEncoder:
         """Строит словарь по уникальным значениям из обучающей выборки."""
         unique = sorted({cwe for cwe in cwe_list if cwe})
         self._vocab = {self.PAD_TOKEN: self.PAD_INDEX, self.UNK_TOKEN: self.UNK_INDEX}
@@ -58,7 +61,7 @@ class CWEEncoder:
         return target
 
     @classmethod
-    def load(cls, path: str | Path) -> "CWEEncoder":
+    def load(cls, path: str | Path) -> CWEEncoder:
         with Path(path).open("r", encoding="utf-8") as fh:
             vocab = json.load(fh)
         if cls.PAD_TOKEN not in vocab or cls.UNK_TOKEN not in vocab:

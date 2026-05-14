@@ -32,8 +32,6 @@ https://www.first.org/cvss/specification-document .
 The library is compatible with both Python 2 and Python 3.
 """
 
-from __future__ import unicode_literals
-
 import copy
 from decimal import ROUND_HALF_UP
 from decimal import Decimal as D
@@ -57,32 +55,38 @@ from .constants import (
 # Иерархия и имена сохранены без изменений (см. оригинал Red Hat).
 class CVSSError(Exception):
     """General CVSS exception."""
+
     pass
 
 
 class CVSS4Error(CVSSError):
     """General CVSS4 exception."""
+
     pass
 
 
 class CVSS4MalformedError(CVSS4Error):
     """Exception for malformed input CVSS4 vectors."""
+
     pass
 
 
 class CVSS4MandatoryError(CVSS4Error):
     """Exception for missing mandatory fields."""
+
     pass
 
 
 class CVSS4RHScoreDoesNotMatch(CVSS4Error):
     """Exception when parsing CVSS4 vectors in Red Hat notation, which have
     score not matching the computed score."""
+
     pass
 
 
 class CVSS4RHMalformedError(CVSS4Error):
     """Exception for malformed input CVSS4 vectors in Red Hat notation."""
+
     pass
 
 
@@ -100,7 +104,7 @@ def final_rounding(x):
     return float(D(x + EPSILON).quantize(D("0.1"), rounding=ROUND_HALF_UP))
 
 
-class CVSS4(object):
+class CVSS4:
     """
     Class to hold CVSS4 vector, parsed values, and all scores.
     """
@@ -144,24 +148,18 @@ class CVSS4(object):
         try:
             score, base_vector = vector.split("/", 1)
         except ValueError:
-            raise CVSS4RHMalformedError(
-                'Malformed CVSS4 vector in Red Hat notation "{0}"'.format(vector)
-            )
+            raise CVSS4RHMalformedError(f'Malformed CVSS4 vector in Red Hat notation "{vector}"')
         try:
             score_value = float(score)
         except ValueError:
-            raise CVSS4RHMalformedError(
-                'Malformed CVSS4 vector in Red Hat notation "{0}"'.format(vector)
-            )
+            raise CVSS4RHMalformedError(f'Malformed CVSS4 vector in Red Hat notation "{vector}"')
         cvss_object = cls(base_vector)
         if cvss_object.scores()[0] == score_value:
             return cvss_object
         else:
             raise CVSS4RHScoreDoesNotMatch(
-                'CVSS4 vector in Red Hat notation "{0}" has score of '
-                '"{1}" which does not match specified score of "{2}"'.format(
-                    base_vector, cvss_object.scores()[0], score
-                )
+                f'CVSS4 vector in Red Hat notation "{base_vector}" has score of '
+                f'"{cvss_object.scores()[0]}" which does not match specified score of "{score}"'
             )
 
     def check_mandatory(self):
@@ -176,7 +174,7 @@ class CVSS4(object):
             if mandatory_metric not in self.metrics:
                 missing.append(mandatory_metric)
         if missing:
-            raise CVSS4MandatoryError('Missing mandatory metrics "{0}"'.format(", ".join(missing)))
+            raise CVSS4MandatoryError(f'Missing mandatory metrics "{", ".join(missing)}"')
 
     def add_missing_optional(self):
         """
@@ -231,34 +229,32 @@ class CVSS4(object):
         # Handle 'CVSS:4.x' in the beginning of vector and split vector
         if not self.vector.startswith("CVSS:4.0/"):
             raise CVSS4MalformedError(
-                'Malformed CVSS4 vector "{0}" is missing mandatory prefix '
-                "or uses unsupported CVSS version".format(self.vector)
+                f'Malformed CVSS4 vector "{self.vector}" is missing mandatory prefix '
+                "or uses unsupported CVSS version"
             )
         try:
             fields = self.vector.split("/")[1:]
         except IndexError:
-            raise CVSS4MalformedError('Malformed CVSS4 vector "{0}"'.format(self.vector))
+            raise CVSS4MalformedError(f'Malformed CVSS4 vector "{self.vector}"')
 
         # Parse fields
         for field in fields:
             if field == "":
-                raise CVSS4MalformedError('Empty field in CVSS4 vector "{0}"'.format(self.vector))
+                raise CVSS4MalformedError(f'Empty field in CVSS4 vector "{self.vector}"')
 
             try:
                 metric, value = field.split(":")
             except ValueError:
-                raise CVSS4MalformedError('Malformed CVSS4 field "{0}"'.format(field))
+                raise CVSS4MalformedError(f'Malformed CVSS4 field "{field}"')
 
             if metric in self.metrics:
-                raise CVSS4MalformedError('Duplicate metric "{0}"'.format(metric))
+                raise CVSS4MalformedError(f'Duplicate metric "{metric}"')
 
             if metric not in METRICS_VALUE_NAMES:
-                raise CVSS4MalformedError('Invalid metric key in CVSS4 vector "{0}"'.format(field))
+                raise CVSS4MalformedError(f'Invalid metric key in CVSS4 vector "{field}"')
 
             if value not in METRICS_VALUE_NAMES[metric]:
-                raise CVSS4MalformedError(
-                    'Invalid metric value in CVSS4 vector "{0}"'.format(field)
-                )
+                raise CVSS4MalformedError(f'Invalid metric value in CVSS4 vector "{field}"')
 
             self.metrics[metric] = value
 
@@ -341,7 +337,7 @@ class CVSS4(object):
         ):
             eq4 = "1"
         elif not (self.m("MSI") == "S" or self.m("MSA") == "S") and not (
-            (self.m("SC") == "H" or self.m("SI") == "H" or self.m("SA") == "H")
+            self.m("SC") == "H" or self.m("SI") == "H" or self.m("SA") == "H"
         ):
             eq4 = "2"
 
@@ -652,7 +648,7 @@ class CVSS4(object):
             if metric in self.original_metrics:
                 value = self.original_metrics[metric]
                 if value != "X":
-                    vector.append("{0}:{1}".format(metric, value))
+                    vector.append(f"{metric}:{value}")
         if output_prefix:
             prefix = "CVSS:4.0/"
         else:

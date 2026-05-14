@@ -1,0 +1,40 @@
+[tool.black]
+line-length = 100
+target-version = ['py311']
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "B", "UP"]
+ignore = [
+    "E501",   # line too long handled by black
+    "N806",   # переменные в верхнем регистре — следуют спецификации CVSS (AV_levels, PR_levels)
+    "N812",   # принятая ML-конвенция: `import torch.nn.functional as F`, `import numpy as np`
+    "N817",   # CamelCase imported as acronym — `from decimal import Decimal as D`
+    "B905",   # zip без strict=True — для batched-данных одинаковой длины не критично
+    "B904",   # raise without from — допустимо в API-обёртках, скрывающих внутренние исключения
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["N802", "N806", "F841", "B007"]  # тесты могут иметь произвольные имена и неиспользованные переменные
+"notebooks/*" = ["E402", "F401"]  # ноутбуки могут иметь нестандартный порядок
+"src/cvss_calculator/*" = ["N802", "N803", "N811", "N818"]  # имена из спецификации FIRST CVSS v4.0
+"scripts/build_chapter_notebooks.py" = ["E402"]  # импорты после sys.path
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+addopts = "-v --cov=src --cov-report=term-missing --cov-report=html"
+markers = [
+    "slow: marks slow tests",
+    "integration: integration tests requiring network",
+]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+check_untyped_defs = false

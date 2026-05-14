@@ -7,9 +7,10 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import pandas as pd
 from tqdm.auto import tqdm
@@ -118,13 +119,11 @@ class DataIntegrator:
                 nvd_record = None
 
         cwe_id = (bdu_record or {}).get("cwe_id") or (nvd_record or {}).get("cwe_id")
-        cvss_v4_vector = (
-            (bdu_record or {}).get("cvss_v4_vector")
-            or (nvd_record or {}).get("cvss_v4_vector")
+        cvss_v4_vector = (bdu_record or {}).get("cvss_v4_vector") or (nvd_record or {}).get(
+            "cvss_v4_vector"
         )
-        cvss_v3_vector = (
-            (bdu_record or {}).get("cvss_v3_vector")
-            or (nvd_record or {}).get("cvss_v3_vector")
+        cvss_v3_vector = (bdu_record or {}).get("cvss_v3_vector") or (nvd_record or {}).get(
+            "cvss_v3_vector"
         )
 
         epss_score = self.epss.fetch(cve_id) if cve_id else None

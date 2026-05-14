@@ -8,16 +8,16 @@ import torch
 import torch.nn as nn
 
 from src.training import (
-    EarlyStopping,
     IGNORE_INDEX,
+    EarlyStopping,
     MultiTaskLoss,
     compute_class_weights,
 )
 
-
 # ---------------------------------------------------------------------------
 # Хелперы.
 # ---------------------------------------------------------------------------
+
 
 def _dummy_logits_and_labels(
     metrics: dict[str, int],
@@ -36,6 +36,7 @@ def _dummy_logits_and_labels(
 # ---------------------------------------------------------------------------
 # MultiTaskLoss.
 # ---------------------------------------------------------------------------
+
 
 def test_loss_basic() -> None:
     """forward возвращает скаляр + dict с ключами активных метрик."""
@@ -121,6 +122,7 @@ def test_loss_ignore_index() -> None:
 # EarlyStopping.
 # ---------------------------------------------------------------------------
 
+
 def test_early_stopping_improvement(tmp_path) -> None:
     """Метрика растёт каждый шаг → не останавливается, patience не накапливается."""
     model = nn.Linear(4, 2)
@@ -175,6 +177,7 @@ def test_early_stopping_save_load(tmp_path) -> None:
 # ---------------------------------------------------------------------------
 # compute_class_weights.
 # ---------------------------------------------------------------------------
+
 
 def test_compute_class_weights() -> None:
     """На несбалансированном наборе вес редкого класса больше веса частого."""

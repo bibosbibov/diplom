@@ -14,7 +14,8 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from collections.abc import Mapping
+from typing import Any
 
 import torch
 import torch.nn.functional as F
@@ -138,7 +139,7 @@ class CVSSModel(nn.Module):
             last_hidden = outputs[0]
         if last_hidden is None:
             raise RuntimeError("Бэкбон не вернул last_hidden_state")
-        return last_hidden[:, 0, :]                          # [B, text_dim]
+        return last_hidden[:, 0, :]  # [B, text_dim]
 
     def forward(
         self,

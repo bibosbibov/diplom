@@ -79,7 +79,9 @@ def split_dataset(
 
     logger.info(
         "Размер сплитов: train=%d, val=%d, test=%d",
-        len(train_df), len(val_df), len(test_df),
+        len(train_df),
+        len(val_df),
+        len(test_df),
     )
     _check_no_leakage(train_df, val_df, test_df, key=split_unit)
 
@@ -118,9 +120,7 @@ def split_and_save(
     df = pd.read_parquet(src)
 
     seed = int(config.get("project", {}).get("seed", 42))
-    parts = split_dataset(
-        df, train_size=0.70, val_size=0.15, test_size=0.15, seed=seed
-    )
+    parts = split_dataset(df, train_size=0.70, val_size=0.15, test_size=0.15, seed=seed)
 
     targets = {
         "train": Path(paths.get("train_split", processed_dir / "train.parquet")),

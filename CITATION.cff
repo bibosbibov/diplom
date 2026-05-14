@@ -1,0 +1,46 @@
+cff-version: 1.2.0
+message: "If you use this software in academic work, please cite as below."
+type: software
+title: "Автоматическая оценка критичности уязвимостей по CVSS v4.0"
+abstract: >-
+  Программная система автоматической оценки критичности уязвимостей
+  программного обеспечения по стандарту CVSS v4.0 на основе трансформерной
+  модели mBERT и собственной реализации калькулятора CVSS v4.0. Магистерская
+  ВКР по направлению 10.04.01 «Информационная безопасность».
+authors:
+  - given-names: Артём
+    alias: bibosbibov
+    affiliation: >-
+      Южно-Российский государственный политехнический университет (НПИ)
+      имени М. И. Платова, кафедра «Информационная безопасность»
+    email: zagreev0805@gmail.com
+version: 1.0.0
+date-released: "2026-06-01"
+license: MIT
+repository-code: "https://github.com/bibosbibov/diplom"
+url: "https://github.com/bibosbibov/diplom"
+keywords:
+  - CVSS
+  - CVSS v4.0
+  - vulnerability assessment
+  - mBERT
+  - multilingual BERT
+  - cybersecurity
+  - vulnerability scoring
+  - transfer learning
+  - multitask learning
+  - оценка критичности уязвимостей
+  - информационная безопасность
+references:
+  - type: standard
+    title: "Common Vulnerability Scoring System v4.0 Specification"
+    authors:
+      - name: "FIRST.Org, Inc."
+    url: "https://www.first.org/cvss/v4.0/specification-document"
+    year: 2023
+  - type: software
+    title: "bert-base-multilingual-cased"
+    authors:
+      - name: "Google AI"
+    url: "https://huggingface.co/bert-base-multilingual-cased"
+    year: 2018

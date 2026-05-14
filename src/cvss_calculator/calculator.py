@@ -8,8 +8,6 @@
 
 from __future__ import annotations
 
-from typing import Dict, Tuple
-
 from .core import CVSS4, CVSS4MalformedError, CVSS4MandatoryError
 
 # Порядок обязательных метрик в строке вектора (CVSS v4.0, раздел 2 спецификации).
@@ -35,7 +33,7 @@ VECTOR_PREFIX = "CVSS:4.0"
 class CVSSCalculator:
     """Обёртка над :class:`CVSS4` для расчёта итогового балла по словарю метрик."""
 
-    def calculate(self, metrics: Dict[str, str]) -> Tuple[float, str, str]:
+    def calculate(self, metrics: dict[str, str]) -> tuple[float, str, str]:
         """Считает базовый балл CVSS v4.0 по словарю метрик.
 
         Args:
@@ -63,7 +61,7 @@ class CVSSCalculator:
         severity = self._score_to_severity(score)
         return score, severity, vector
 
-    def build_vector_string(self, metrics: Dict[str, str]) -> str:
+    def build_vector_string(self, metrics: dict[str, str]) -> str:
         """Собирает каноническую CVSS-строку из словаря метрик.
 
         Поля упорядочиваются согласно спецификации (mandatory сначала, затем
@@ -80,13 +78,13 @@ class CVSSCalculator:
                 parts.append(f"{key}:{metrics[key]}")
         return "/".join(parts)
 
-    def parse_vector_string(self, vector: str) -> Dict[str, str]:
+    def parse_vector_string(self, vector: str) -> dict[str, str]:
         """Разбирает CVSS-строку обратно в словарь ``{метрика: значение}``.
 
         Префикс ``CVSS:4.0`` отбрасывается. Поддерживается любой порядок
         полей, дублирование не проверяется (это задача :class:`CVSS4`).
         """
-        result: Dict[str, str] = {}
+        result: dict[str, str] = {}
         if not vector:
             return result
         tokens = vector.split("/")

@@ -14,9 +14,10 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from collections.abc import Mapping
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Dict, Mapping
+from typing import Any
 
 import pandas as pd
 import torch
@@ -57,7 +58,7 @@ _COLUMN_ALIASES = {
 
 def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     """Приводит названия колонок к каноничным именам, ожидаемым CVSSDataset."""
-    rename: Dict[str, str] = {}
+    rename: dict[str, str] = {}
     for canonical, aliases in _COLUMN_ALIASES.items():
         if canonical in df.columns:
             continue
@@ -72,12 +73,13 @@ def _normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
 # Конфиг.
 # ---------------------------------------------------------------------------
 
-def load_config(path: Path) -> Dict[str, Any]:
+
+def load_config(path: Path) -> dict[str, Any]:
     with open(path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
-def _apply_debug_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
+def _apply_debug_overrides(config: dict[str, Any]) -> dict[str, Any]:
     """В debug-режиме урезаем эпохи и батч, чтобы прогон занимал минуты."""
     cfg = deepcopy(config)
     for stage_key in ("stage1", "stage2"):
@@ -95,6 +97,7 @@ def _apply_debug_overrides(config: Dict[str, Any]) -> Dict[str, Any]:
 # Сборка датасета и DataLoader-ов.
 # ---------------------------------------------------------------------------
 
+
 def _make_loaders(
     train_df: pd.DataFrame,
     val_df: pd.DataFrame,
@@ -106,12 +109,20 @@ def _make_loaders(
     max_length: int,
 ) -> tuple[DataLoader, DataLoader]:
     train_ds = CVSSDataset(
-        train_df, tokenizer, cwe_encoder, features_encoder,
-        version=version, max_length=max_length,
+        train_df,
+        tokenizer,
+        cwe_encoder,
+        features_encoder,
+        version=version,
+        max_length=max_length,
     )
     val_ds = CVSSDataset(
-        val_df, tokenizer, cwe_encoder, features_encoder,
-        version=version, max_length=max_length,
+        val_df,
+        tokenizer,
+        cwe_encoder,
+        features_encoder,
+        version=version,
+        max_length=max_length,
     )
     # num_workers=0 чтобы избежать проблем с pickle/spawn на Windows.
     train_loader = DataLoader(train_ds, batch_size=batch_size, shuffle=True, num_workers=0)
@@ -122,10 +133,7 @@ def _make_loaders(
 def _build_model(config: Mapping[str, Any], stage_key: str, num_cwe: int) -> CVSSModel:
     """Создаёт CVSSModel с числом классов голов под нужный этап."""
     metric_classes = dict(config[stage_key]["metric_classes"])
-    pretrained = (
-        config.get("model", {}).get("pretrained_name")
-        or "bert-base-multilingual-cased"
-    )
+    pretrained = config.get("model", {}).get("pretrained_name") or "bert-base-multilingual-cased"
     return CVSSModel(
         num_cwe=num_cwe,
         metric_classes=metric_classes,
@@ -137,12 +145,13 @@ def _build_model(config: Mapping[str, Any], stage_key: str, num_cwe: int) -> CVS
 # Главный пайплайн.
 # ---------------------------------------------------------------------------
 
+
 def run(
     stage: int,
     config_path: Path,
     resume: Path | None = None,
     debug: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Точка входа без argparse — удобно вызывать из тестов и ноутбуков."""
     config = load_config(config_path)
     if debug:
@@ -158,9 +167,7 @@ def run(
     if debug:
         train_df = train_df.head(10).reset_index(drop=True)
         val_df = val_df.head(10).reset_index(drop=True)
-        logger.info(
-            "debug: trimmed train→%d, val→%d rows", len(train_df), len(val_df)
-        )
+        logger.info("debug: trimmed train→%d, val→%d rows", len(train_df), len(val_df))
 
     device = get_device()
     if device.type == "cpu" and not debug:
@@ -177,14 +184,11 @@ def run(
     cwe_encoder = CWEEncoder().fit(cwe_series.tolist())
     features_encoder = FeaturesEncoder()
 
-    pretrained = (
-        config.get("model", {}).get("pretrained_name")
-        or "bert-base-multilingual-cased"
-    )
+    pretrained = config.get("model", {}).get("pretrained_name") or "bert-base-multilingual-cased"
     tokenizer = CVSSTokenizer(model_name=pretrained, max_length=512)
     max_length = int(config.get("data_preparation", {}).get("max_length", 512))
 
-    history: Dict[str, Any] = {}
+    history: dict[str, Any] = {}
 
     if stage in (1, 0):
         logger.info("=== STAGE 1 ===")
@@ -195,14 +199,19 @@ def run(
         val_df_v3 = val_df[val_df["cvss_v3_vector"].notna()].reset_index(drop=True)
         logger.info(
             "stage1: filtered to v3-only — train=%d, val=%d",
-            len(train_df_v3), len(val_df_v3),
+            len(train_df_v3),
+            len(val_df_v3),
         )
         model = _build_model(config, "stage1", num_cwe=len(cwe_encoder))
         trainer = Trainer(config, model, device=device)
         if resume is not None:
             trainer.load_checkpoint(resume)
         train_loader, val_loader = _make_loaders(
-            train_df_v3, val_df_v3, tokenizer, cwe_encoder, features_encoder,
+            train_df_v3,
+            val_df_v3,
+            tokenizer,
+            cwe_encoder,
+            features_encoder,
             version="v3",
             batch_size=int(config["stage1"]["batch_size"]),
             max_length=max_length,
@@ -218,7 +227,8 @@ def run(
         val_df_v4 = val_df[val_df["cvss_v4_vector"].notna()].reset_index(drop=True)
         logger.info(
             "stage2: filtered to v4-only — train=%d, val=%d",
-            len(train_df_v4), len(val_df_v4),
+            len(train_df_v4),
+            len(val_df_v4),
         )
         # Если идём stage 0 (1+2), модель надо построить под v4-головы заранее.
         # Trainer всё равно сделает reinit, но размеры и порядок голов должны
@@ -228,7 +238,11 @@ def run(
         if resume is not None and stage == 2:
             trainer.load_checkpoint(resume)
         train_loader, val_loader = _make_loaders(
-            train_df_v4, val_df_v4, tokenizer, cwe_encoder, features_encoder,
+            train_df_v4,
+            val_df_v4,
+            tokenizer,
+            cwe_encoder,
+            features_encoder,
             version="v4",
             batch_size=int(config["stage2"]["batch_size"]),
             max_length=max_length,
@@ -250,24 +264,33 @@ def run(
 # argparse.
 # ---------------------------------------------------------------------------
 
+
 def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Двухэтапное обучение CVSSModel (CVSS v3.1 → CVSS v4.0).",
     )
     parser.add_argument(
-        "--stage", type=int, choices=(0, 1, 2), required=True,
+        "--stage",
+        type=int,
+        choices=(0, 1, 2),
+        required=True,
         help="1 — только stage1, 2 — только stage2, 0 — оба последовательно",
     )
     parser.add_argument(
-        "--config", type=Path, default=Path("configs/train.yaml"),
+        "--config",
+        type=Path,
+        default=Path("configs/train.yaml"),
         help="путь к YAML с гиперпараметрами",
     )
     parser.add_argument(
-        "--resume", type=Path, default=None,
+        "--resume",
+        type=Path,
+        default=None,
         help="путь к чекпоинту для продолжения",
     )
     parser.add_argument(
-        "--debug", action="store_true",
+        "--debug",
+        action="store_true",
         help="ограничивает train/val до 10 записей и 1 эпохи (smoke test)",
     )
     return parser.parse_args(argv)

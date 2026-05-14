@@ -55,8 +55,8 @@ class FusionLayer(nn.Module):
         Returns:
             ``FloatTensor[B, output_dim]`` — объединённое представление.
         """
-        h_combined = torch.cat([h_text, h_feat], dim=-1)     # [B, 832]
-        h = self.proj(h_combined)                             # [B, 512]
+        h_combined = torch.cat([h_text, h_feat], dim=-1)  # [B, 832]
+        h = self.proj(h_combined)  # [B, 512]
         h = self.activation(h)
         h = self.dropout(h)
         return h

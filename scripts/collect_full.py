@@ -16,9 +16,9 @@
 from __future__ import annotations
 
 import sys
+from collections.abc import Iterable, Iterator
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Iterable, Iterator
 
 import click
 import pandas as pd
@@ -44,7 +44,9 @@ NVD_DT_FORMAT = "%Y-%m-%dT%H:%M:%S.000"
 EPSS_BATCH_SIZE = 100
 
 
-def date_windows(start_str: str, end_str: str, max_days: int = 120) -> Iterator[tuple[datetime, datetime]]:
+def date_windows(
+    start_str: str, end_str: str, max_days: int = 120
+) -> Iterator[tuple[datetime, datetime]]:
     """NVD требует pubStartDate/pubEndDate с диапазоном ≤ 120 дней."""
     start = datetime.fromisoformat(start_str)
     end = datetime.fromisoformat(end_str)

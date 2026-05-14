@@ -37,9 +37,7 @@ class CWENames:
         cache_dir: str | Path = "data/raw",
     ) -> None:
         self._config = config or {}
-        self._url = self._config.get(
-            "url", "https://cwe.mitre.org/data/xml/cwec_latest.xml.zip"
-        )
+        self._url = self._config.get("url", "https://cwe.mitre.org/data/xml/cwec_latest.xml.zip")
         self._timeout = int(self._config.get("timeout_sec", 120))
         self._cache_path = Path(cache_dir) / "cwe_names.json"
         self._cache_path.parent.mkdir(parents=True, exist_ok=True)

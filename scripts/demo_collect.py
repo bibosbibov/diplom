@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import json
 import random
 import sys
 from pathlib import Path
@@ -114,7 +113,11 @@ def main() -> None:
         if df[col].dtype == object:
             filled = df[col].notna().sum()
         else:
-            filled = (df[col].notna() & (df[col] != 0)).sum() if col in ("kev", "exploit") else df[col].notna().sum()
+            filled = (
+                (df[col].notna() & (df[col] != 0)).sum()
+                if col in ("kev", "exploit")
+                else df[col].notna().sum()
+            )
         pct = filled / len(df) * 100
         print(f"  {col:<22} {filled:>3}/{len(df)} ({pct:5.1f}%)")
 

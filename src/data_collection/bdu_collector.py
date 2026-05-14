@@ -11,9 +11,10 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterator
 from io import BytesIO
 from pathlib import Path
-from typing import Any, Iterator
+from typing import Any
 from xml.etree import ElementTree as ET
 
 import pandas as pd
@@ -66,9 +67,7 @@ class BDUCollector:
         self._url_xlsx = self._config.get(
             "url_xlsx", "https://bdu.fstec.ru/files/documents/vullist.xlsx"
         )
-        self._url_xml = self._config.get(
-            "url", "https://bdu.fstec.ru/files/documents/vullist.xml"
-        )
+        self._url_xml = self._config.get("url", "https://bdu.fstec.ru/files/documents/vullist.xml")
         self._timeout = int(self._config.get("timeout_sec", 60))
         self._cache_dir = Path(cache_dir)
         self._cache_dir.mkdir(parents=True, exist_ok=True)

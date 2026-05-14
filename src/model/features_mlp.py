@@ -86,9 +86,9 @@ class FeaturesMLP(nn.Module):
         Returns:
             ``FloatTensor[B, output_dim]`` — закодированный вектор ``h_feat``.
         """
-        cwe_emb = self.cwe_embedding(cwe_idx)               # [B, 64]
-        f_ext = torch.cat([features, cwe_emb], dim=-1)       # [B, 67]
-        return self.net(f_ext)                               # [B, 64]
+        cwe_emb = self.cwe_embedding(cwe_idx)  # [B, 64]
+        f_ext = torch.cat([features, cwe_emb], dim=-1)  # [B, 67]
+        return self.net(f_ext)  # [B, 64]
 
 
 __all__ = ["FeaturesMLP"]
