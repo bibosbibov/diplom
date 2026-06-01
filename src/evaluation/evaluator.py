@@ -439,3 +439,73 @@ def _jsonify(obj: Any) -> Any:
 
 
 __all__ = ["Evaluator"]
+
+
+# ---------------------------------------------------------------------------
+# CLI — позволяет прогнать оценку любого ``best_stage2.pt`` без ноутбука.
+# Используется в сравнительных экспериментах (baseline vs DAPT, и т.п.).
+# ---------------------------------------------------------------------------
+
+
+def main(argv: list[str] | None = None) -> int:
+    """``python -m src.evaluation.evaluator --model ... --output ...``.
+
+    Прогоняет :class:`Evaluator.evaluate` на test-parquet и сохраняет JSON
+    через :meth:`Evaluator.save_results`. Тяжёлые поля (DataFrame с матрицами
+    ошибок) сериализуются через ``_jsonify``.
+    """
+    import argparse
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
+    parser = argparse.ArgumentParser(
+        description="Оценка stage 2 (CVSS v4.0) чекпоинта на тестовой выборке.",
+    )
+    parser.add_argument("--model", type=Path, required=True, help="путь к best_stage2.pt")
+    parser.add_argument("--config", type=Path, default=Path("configs/config.yaml"))
+    parser.add_argument(
+        "--test-data", type=Path, default=Path("data/processed/test.parquet")
+    )
+    parser.add_argument(
+        "--output", type=Path, default=Path("reports/v4_results.json"),
+        help="путь к JSON-выходу (для PNG-матриц используется configs/config.yaml.paths.figures_dir)",
+    )
+    parser.add_argument("--batch-size", type=int, default=16)
+    parser.add_argument(
+        "--max-samples", type=int, default=None,
+        help="ограничить число записей (для быстрой проверки)",
+    )
+    parser.add_argument(
+        "--no-figures", action="store_true",
+        help="не рендерить PNG-матрицы (быстрее, удобно для CI)",
+    )
+    args = parser.parse_args(argv)
+
+    evaluator = Evaluator(
+        model_path=args.model,
+        config_path=args.config,
+        batch_size=args.batch_size,
+    )
+    test_df = pd.read_parquet(args.test_data)
+    results = evaluator.evaluate(test_df, max_samples=args.max_samples)
+    figures_dir = Path("/tmp/_no_figures") if args.no_figures else None
+    if args.no_figures:
+        figures_dir.mkdir(parents=True, exist_ok=True)
+    evaluator.save_results(results, output_path=args.output, figures_dir=figures_dir)
+    agg = results["aggregated"]
+    print(
+        f"v4 macro_f1={agg['macro_f1']:.4f} "
+        f"vector_acc={agg['vector_accuracy']:.4f} "
+        f"severity_acc={agg['severity_accuracy']:.4f} "
+        f"score_mae={agg['score_mae']:.4f} "
+        f"n={agg['samples_evaluated']}"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
