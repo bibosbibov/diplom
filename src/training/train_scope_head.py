@@ -53,6 +53,7 @@ import torch.nn as nn
 import yaml
 from sklearn.metrics import accuracy_score, f1_score
 from torch.utils.data import DataLoader, TensorDataset
+from tqdm.auto import tqdm
 
 from src.data_preparation import (
     CVSSDataset,
@@ -163,8 +164,13 @@ def cache_fused_features(
     device: torch.device,
     batch_size: int = 32,
     max_length: int = 512,
+    desc: str = "caching",
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Один проход замороженного backbone, кэширует ``h_fused`` и метки Scope.
+
+    Args:
+        ...
+        desc: подпись для tqdm-прогресс-бара (например ``"train"`` / ``"val"``).
 
     Returns:
         (``fused`` ``FloatTensor[N, 512]``, ``labels`` ``LongTensor[N]``).
@@ -187,7 +193,16 @@ def cache_fused_features(
         dtype=torch.long,
     )
     start = time.perf_counter()
-    for batch in loader:
+    progress = tqdm(
+        loader,
+        total=len(loader),
+        desc=f"cache {desc}",
+        unit="batch",
+        dynamic_ncols=True,
+        leave=False,
+    )
+    seen = 0
+    for batch in progress:
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         cwe_idx = batch["cwe_idx"].to(device)
@@ -197,11 +212,14 @@ def cache_fused_features(
         h_feat = model.features_mlp(features, cwe_idx)
         h_fused = model.fusion(h_text, h_feat)  # [B, 512]
         fused_chunks.append(h_fused.detach().to("cpu"))
+        seen += input_ids.shape[0]
+        progress.set_postfix(records=seen)
 
     fused = torch.cat(fused_chunks, dim=0)  # [N, 512]
     elapsed = time.perf_counter() - start
     logger.info(
-        "Кэширование завершено: %d записей за %.1f сек (%.1f rec/sec)",
+        "Кэширование %s завершено: %d записей за %.1f сек (%.1f rec/sec)",
+        desc,
         fused.shape[0],
         elapsed,
         fused.shape[0] / max(elapsed, 1e-6),
@@ -261,7 +279,15 @@ def train_head(
         head.train()
         running_loss = 0.0
         n_batches = 0
-        for x, y in train_loader:
+        batch_progress = tqdm(
+            train_loader,
+            total=len(train_loader),
+            desc=f"epoch {epoch}/{epochs}",
+            unit="batch",
+            dynamic_ncols=True,
+            leave=False,
+        )
+        for x, y in batch_progress:
             x = x.to(device)
             y = y.to(device)
             optimizer.zero_grad(set_to_none=True)
@@ -271,6 +297,7 @@ def train_head(
             optimizer.step()
             running_loss += float(loss.item())
             n_batches += 1
+            batch_progress.set_postfix(loss=f"{loss.item():.4f}")
         train_loss = running_loss / max(n_batches, 1)
 
         head.eval()
@@ -403,11 +430,13 @@ def run(
     train_fused, train_targets = cache_fused_features(
         model, train_df, tokenizer, cwe_encoder, features_encoder, text_processor,
         device=device, batch_size=batch_size_cache, max_length=max_length,
+        desc="train",
     )
     logger.info("Кэширую val fused...")
     val_fused, val_targets = cache_fused_features(
         model, val_df, tokenizer, cwe_encoder, features_encoder, text_processor,
         device=device, batch_size=batch_size_cache, max_length=max_length,
+        desc="val",
     )
 
     # ----- 4) Обучение линейной головы
