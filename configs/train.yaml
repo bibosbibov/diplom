@@ -8,6 +8,27 @@
 seed: 42
 
 # -----------------------------------------------------------------------------
+# DAPT — Domain-Adaptive Pretraining (опционально, перед этапом 1).
+# Доучивает базовый mBERT на корпусе описаний уязвимостей (MLM,
+# 15% маскирование). Результат сохраняется в output_dir и подаётся
+# в stage 1 через `python -m src.training.train --stage 1
+# --pretrained-name models/mbert_dapt`.
+# -----------------------------------------------------------------------------
+dapt:
+  output_dir: "models/mbert_dapt"
+  epochs: 2
+  batch_size: 16            # на T4 без gradient_accumulation
+  gradient_accumulation_steps: 1
+  learning_rate: 5.0e-5
+  weight_decay: 0.01
+  warmup_ratio: 0.1
+  mlm_probability: 0.15     # стандарт BERT/RoBERTa
+  max_length: 512
+  include_cwe_name: false   # cwe_name отдельным сигналом, чтобы не перекосить
+  log_every_n_steps: 50
+  save_total_limit: 1
+
+# -----------------------------------------------------------------------------
 # Этап 1 — предобучение на CVSS v3.1 (8 общих метрик).
 # -----------------------------------------------------------------------------
 stage1:

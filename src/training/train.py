@@ -151,11 +151,26 @@ def run(
     config_path: Path,
     resume: Path | None = None,
     debug: bool = False,
+    pretrained_name: str | None = None,
 ) -> dict[str, Any]:
-    """Точка входа без argparse — удобно вызывать из тестов и ноутбуков."""
+    """Точка входа без argparse — удобно вызывать из тестов и ноутбуков.
+
+    Args:
+        stage: ``0`` (этап 1+2), ``1`` или ``2``.
+        config_path: путь к ``configs/train.yaml``.
+        resume: путь к чекпоинту для возобновления.
+        debug: режим smoke-test (10 строк, 1 эпоха).
+        pretrained_name: переопределяет ``model.pretrained_name`` из конфига.
+            Если задан — берётся он. Используется, чтобы стартовать stage 1
+            с DAPT-чекпоинта (``models/mbert_dapt``) вместо ванильного mBERT,
+            не редактируя файл конфигурации.
+    """
     config = load_config(config_path)
     if debug:
         config = _apply_debug_overrides(config)
+    if pretrained_name is not None:
+        config.setdefault("model", {})["pretrained_name"] = pretrained_name
+        logger.info("pretrained_name переопределён: %s", pretrained_name)
     set_seed(int(config.get("seed", 42)))
 
     paths = config.get("paths", {})
@@ -293,6 +308,15 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="ограничивает train/val до 10 записей и 1 эпохи (smoke test)",
     )
+    parser.add_argument(
+        "--pretrained-name",
+        type=str,
+        default=None,
+        help=(
+            "переопределяет model.pretrained_name из конфига. Пример: "
+            "'models/mbert_dapt' — стартовать stage 1 от DAPT-чекпоинта"
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -303,7 +327,13 @@ def main(argv: list[str] | None = None) -> int:
         datefmt="%H:%M:%S",
     )
     args = _parse_args(argv)
-    run(stage=args.stage, config_path=args.config, resume=args.resume, debug=args.debug)
+    run(
+        stage=args.stage,
+        config_path=args.config,
+        resume=args.resume,
+        debug=args.debug,
+        pretrained_name=args.pretrained_name,
+    )
     return 0
 
 
