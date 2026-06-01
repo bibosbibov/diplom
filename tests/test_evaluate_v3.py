@@ -120,9 +120,18 @@ def cwe_vocab(tmp_path: Path) -> Path:
 
 @pytest.fixture()
 def fake_checkpoint(tmp_path: Path) -> Path:
-    """Пустой ``.pt`` — реальная загрузка обходится monkeypatch'ем."""
+    """``.pt`` с минимальным state_dict — нужен только ``cwe_embedding.weight``.
+
+    Реальная загрузка модели обходится monkeypatch'ем
+    :meth:`V3Evaluator._load_model`; но :meth:`_infer_checkpoint_cwe_size`
+    читает форму CWE-эмбеддинга, чтобы решить, выравнивать ли энкодер.
+    Фейковый CWE-вокаб ``cwe_vocab`` фикстуры имеет 4 записи (PAD + UNK + 2 CWE).
+    """
     path = tmp_path / "fake_stage1.pt"
-    torch.save({"model_state": {}}, path)
+    torch.save(
+        {"model_state": {"features_mlp.cwe_embedding.weight": torch.zeros(4, 64)}},
+        path,
+    )
     return path
 
 

@@ -124,7 +124,7 @@ class V3Evaluator:
 
         vocab_path = Path(cwe_vocab_path or paths.get("cwe_vocab", _DEFAULT_CWE_VOCAB))
         train_path = Path(train_data_path or paths.get("train_data", _DEFAULT_TRAIN_DATA))
-        self.cwe_encoder = self._load_or_build_cwe_encoder(vocab_path, train_path)
+        full_cwe_encoder = self._load_or_build_cwe_encoder(vocab_path, train_path)
         self.tokenizer = CVSSTokenizer(model_name=pretrained_tokenizer, max_length=self.max_length)
         self.features_encoder = FeaturesEncoder()
         self.text_processor = TextProcessor()
@@ -139,6 +139,19 @@ class V3Evaluator:
                 "stage1.metric_classes из конфига не покрывает 8 голов "
                 f"V3_METRIC_ORDER={V3_METRIC_ORDER}; получено {self.stage1_metric_classes}"
             )
+
+        # Размер CWE-вокаба в чекпоинте может отличаться от текущего
+        # (data/processed/cwe_vocab.json менялся между прогонами). Чтобы
+        # state_dict грузился без рассогласования форм, подгоняем энкодер
+        # под фактический размер ``features_mlp.cwe_embedding.weight``.
+        state = torch.load(self.model_path, map_location="cpu", weights_only=False)
+        if isinstance(state, Mapping) and "model_state" in state:
+            state = state["model_state"]
+        self._state_dict = state
+        ckpt_num_cwe = self._infer_checkpoint_cwe_size(state)
+        self.cwe_encoder, self.cwe_mode = self._align_cwe_encoder(
+            full_cwe_encoder, ckpt_num_cwe
+        )
 
         pretrained_model = self.config.get("model", {}).get("pretrained_name", pretrained_tokenizer)
         self.model = self._load_model(pretrained_model)
@@ -175,12 +188,70 @@ class V3Evaluator:
             metric_classes=self.stage1_metric_classes,
             pretrained_name=pretrained_name,
         )
-        state = torch.load(self.model_path, map_location="cpu", weights_only=False)
-        if isinstance(state, Mapping) and "model_state" in state:
-            state = state["model_state"]
-        model.load_state_dict(state)
+        model.load_state_dict(self._state_dict)
         logger.info("Загружена stage 1 модель из %s на устройство %s", self.model_path, self.device)
         return model.to(self.device)
+
+    @staticmethod
+    def _infer_checkpoint_cwe_size(state: Mapping[str, Any]) -> int:
+        """Достаёт ``num_cwe`` (число строк CWE-эмбеддинга) из state_dict."""
+        weight = state.get("features_mlp.cwe_embedding.weight")
+        if weight is None:
+            raise KeyError(
+                "В state_dict нет 'features_mlp.cwe_embedding.weight' — "
+                "невозможно определить размер CWE-вокаба чекпоинта"
+            )
+        return int(weight.shape[0])
+
+    @staticmethod
+    def _align_cwe_encoder(
+        full_encoder: CWEEncoder,
+        ckpt_num_cwe: int,
+    ) -> tuple[CWEEncoder, str]:
+        """Подгоняет CWEEncoder под размер ``cwe_embedding`` чекпоинта.
+
+        Если размеры совпадают — возвращает исходный энкодер (``mode="match"``).
+        Если в чекпоинте CWE-вокаб меньше (типично: стейдж 1 учился со
+        старым, обрезанным словарём) — строится стаб-энкодер того же
+        размера: PAD и UNK остаются на индексах 0/1, остальные индексы
+        2..ckpt_num_cwe-1 заполняются плейсхолдерами ``<EMPTY_i>``, которые
+        никогда не встретятся в реальных ``cwe_id``. На инференсе
+        :meth:`CWEEncoder.transform` для любого настоящего CWE вернёт
+        ``UNK_INDEX`` — это совпадает с тем, что видела модель на обучении
+        (большинство CWE при маленьком исходном словаре тоже падали в UNK).
+
+        Размер чекпоинта больше текущего — необычный случай, чаще всего
+        ошибка путей. В этом случае также возвращается стаб подходящей
+        длины + ``mode="stub_larger"`` (с предупреждением в логе).
+        """
+        full_n = len(full_encoder)
+        if ckpt_num_cwe == full_n:
+            logger.info("CWE-вокаб совпадает с чекпоинтом: %d записей", full_n)
+            return full_encoder, "match"
+
+        mode = "stub_smaller" if ckpt_num_cwe < full_n else "stub_larger"
+        logger.warning(
+            "Размер CWE-вокаба не совпадает (чекпоинт=%d, текущий=%d) — "
+            "использую стаб-энкодер: реальные CWE будут маппиться в UNK. "
+            "Это значит, CWE-вход модели на оценке = той же константе, что и "
+            "в большинстве случаев при обучении (когда вокаб был мал).",
+            ckpt_num_cwe,
+            full_n,
+        )
+        if ckpt_num_cwe < 2:
+            raise ValueError(
+                f"В чекпоинте CWE-вокаб слишком мал ({ckpt_num_cwe}) — "
+                "должно быть как минимум PAD+UNK"
+            )
+        stub = CWEEncoder()
+        vocab: dict[str, int] = {
+            CWEEncoder.PAD_TOKEN: CWEEncoder.PAD_INDEX,
+            CWEEncoder.UNK_TOKEN: CWEEncoder.UNK_INDEX,
+        }
+        for i in range(2, ckpt_num_cwe):
+            vocab[f"<EMPTY_{i}>"] = i
+        stub._vocab = vocab  # noqa: SLF001 — приватное поле, но это контролируемый стаб
+        return stub, mode
 
     # --------------------------------------------------------------- filtering
 
@@ -305,6 +376,8 @@ class V3Evaluator:
         aggregated = {
             "macro_f1": float(np.mean(f1_macros)) if f1_macros else 0.0,
             "samples_evaluated": n,
+            "cwe_mode": self.cwe_mode,
+            "cwe_vocab_size_checkpoint": len(self.cwe_encoder),
         }
         return {"per_metric": per_metric, "aggregated": aggregated}
 
@@ -369,11 +442,34 @@ def _render_markdown(results: Mapping[str, Any]) -> str:
         f"| Macro-F1 (8 метрик)       | {aggregated.get('macro_f1', 0.0):.4f}                  |",
         f"| Размер test set           | {int(aggregated.get('samples_evaluated', 0))} CVSS v3.x записей |",
         "",
-        "## Per-metric качество (test set)",
-        "",
-        "",
-        _TABLE_HEADER.rstrip("\n"),
     ]
+
+    cwe_mode = aggregated.get("cwe_mode")
+    if cwe_mode and cwe_mode != "match":
+        cwe_n = int(aggregated.get("cwe_vocab_size_checkpoint", 0))
+        lines.extend(
+            [
+                "> **Оговорка про CWE-вход.** В чекпоинте этапа 1 CWE-эмбеддинг "
+                f"имеет размер {cwe_n} строк (PAD + UNK + {max(cwe_n - 2, 0)} "
+                "реальных CWE), тогда как текущий ``data/processed/cwe_vocab.json`` "
+                "содержит 683 записи. Чтобы загрузить веса без рассогласования "
+                "форм, используется стаб-энкодер той же длины, в котором все "
+                "реальные ``cwe_id`` маппятся в UNK. Это соответствует тому, "
+                "что видела модель на обучении (большинство CWE при маленьком "
+                "вокабе попадали в UNK), но CWE-ветка фактически выдаёт "
+                "константу для всех записей теста.",
+                "",
+            ]
+        )
+
+    lines.extend(
+        [
+            "## Per-metric качество (test set)",
+            "",
+            "",
+            _TABLE_HEADER.rstrip("\n"),
+        ]
+    )
     for metric in V3_METRIC_ORDER:
         scores = per_metric.get(metric, {})
         f1 = float(scores.get("f1_macro", 0.0))
