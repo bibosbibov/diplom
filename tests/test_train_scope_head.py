@@ -24,6 +24,7 @@ import torch.nn as nn
 from src.training.train_scope_head import (
     SCOPE_CLASSES,
     _filter_with_scope,
+    _trim_pad_collate,
     cache_fused_features,
     extract_scope,
     train_head,
@@ -184,6 +185,38 @@ def test_scope_classes_order() -> None:
 
 
 # ---------------------------------------------------------------------------
+# _trim_pad_collate — динамический padding
+# ---------------------------------------------------------------------------
+
+
+def test_trim_pad_collate_trims_to_batch_max() -> None:
+    """Хвостовой padding режется до самой длинной реальной строки в батче."""
+    batch = [
+        {  # реальная длина 3 (3 единицы маски), добито до 8
+            "input_ids": torch.tensor([1, 2, 3, 0, 0, 0, 0, 0]),
+            "attention_mask": torch.tensor([1, 1, 1, 0, 0, 0, 0, 0]),
+        },
+        {  # реальная длина 5
+            "input_ids": torch.tensor([1, 2, 3, 4, 5, 0, 0, 0]),
+            "attention_mask": torch.tensor([1, 1, 1, 1, 1, 0, 0, 0]),
+        },
+    ]
+    out = _trim_pad_collate(batch)
+    # Батч-максимум реальной длины = 5 ⇒ обрезаем до 5.
+    assert out["input_ids"].shape == (2, 5)
+    assert out["attention_mask"].shape == (2, 5)
+    assert out["input_ids"][1].tolist() == [1, 2, 3, 4, 5]
+
+
+def test_trim_pad_collate_keeps_at_least_one_token() -> None:
+    """Пустой (полностью padding) батч не схлопывается до нулевой длины."""
+    batch = [{"input_ids": torch.zeros(4, dtype=torch.long),
+              "attention_mask": torch.zeros(4, dtype=torch.long)}]
+    out = _trim_pad_collate(batch)
+    assert out["input_ids"].shape == (1, 1)
+
+
+# ---------------------------------------------------------------------------
 # cache_fused_features — со встроенным мини-бэкбоном
 # ---------------------------------------------------------------------------
 
@@ -267,7 +300,7 @@ def test_cache_fused_features_shape(monkeypatch) -> None:
         tokenizer=_FakeTokenizer(),
         cwe_encoder=None, features_encoder=None, text_processor=None,
         device=torch.device("cpu"),
-        batch_size=2, max_length=8,
+        batch_size=2, max_length=8, num_workers=0,
     )
     assert fused.shape == (3, 512)
     assert targets.tolist() == [0, 1, 0]  # U=0, C=1

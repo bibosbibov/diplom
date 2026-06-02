@@ -39,9 +39,16 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import re
 import time
+
+# С num_workers>0 форк процессов конфликтует с внутренним параллелизмом
+# Rust-токенизатора HF (предупреждение + риск дедлока). Параллелизм нам даёт
+# сам DataLoader, поэтому intra-токенизаторный отключаем явно.
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 from collections.abc import Mapping
+from contextlib import nullcontext
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -52,7 +59,7 @@ import torch
 import torch.nn as nn
 import yaml
 from sklearn.metrics import accuracy_score, f1_score
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, TensorDataset, default_collate
 from tqdm.auto import tqdm
 
 from src.data_preparation import (
@@ -153,6 +160,26 @@ def load_frozen_backbone(
 # ---------------------------------------------------------------------------
 
 
+def _trim_pad_collate(batch: list[dict[str, Any]]) -> dict[str, Any]:
+    """Collate с динамическим padding: обрезает текстовые тензоры до длины
+    самой длинной реальной последовательности в батче.
+
+    ``CVSSTokenizer`` добивает каждую строку до ``max_length`` (512). Но
+    BERT-padding всегда правосторонний и занулён attention-маской, поэтому
+    срезание хвостовых pad-позиций до батч-максимума **не меняет** выход
+    модели — лишь убирает бесполезный forward по pad-токенам. На корпусе CVE,
+    где описания обычно сильно короче 512, это главный источник ускорения.
+    """
+    collated = default_collate(batch)
+    mask = collated["attention_mask"]
+    # Реальная длина строки = число единиц в маске (padding контурно справа).
+    max_len = int(mask.sum(dim=1).max().item())
+    max_len = max(max_len, 1)
+    collated["input_ids"] = collated["input_ids"][:, :max_len].contiguous()
+    collated["attention_mask"] = mask[:, :max_len].contiguous()
+    return collated
+
+
 @torch.no_grad()
 def cache_fused_features(
     model: CVSSModel,
@@ -164,17 +191,25 @@ def cache_fused_features(
     device: torch.device,
     batch_size: int = 32,
     max_length: int = 512,
+    num_workers: int = 2,
     desc: str = "caching",
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Один проход замороженного backbone, кэширует ``h_fused`` и метки Scope.
 
+    Ускорения относительно наивного forward:
+      * **динамический padding** (:func:`_trim_pad_collate`) — режем pad-хвост
+        до батч-максимума, результат идентичен;
+      * **fp16 autocast** на CUDA — задействует tensor cores T4;
+      * **num_workers** — токенизация в фоне, не блокирует GPU.
+
     Args:
         ...
+        num_workers: число воркеров DataLoader для фоновой токенизации.
         desc: подпись для tqdm-прогресс-бара (например ``"train"`` / ``"val"``).
 
     Returns:
         (``fused`` ``FloatTensor[N, 512]``, ``labels`` ``LongTensor[N]``).
-        Тензоры на CPU — для последующего быстрого обучения линейной головы.
+        Тензоры на CPU (fp32) — для последующего быстрого обучения линейной головы.
     """
     dataset = CVSSDataset(
         dataframe,
@@ -185,13 +220,29 @@ def cache_fused_features(
         text_processor=text_processor,
         max_length=max_length,
     )
-    loader = DataLoader(dataset, batch_size=batch_size, shuffle=False, num_workers=0)
+    use_cuda = device.type == "cuda"
+    loader = DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        collate_fn=_trim_pad_collate,
+        pin_memory=use_cuda,
+        persistent_workers=num_workers > 0,
+    )
+    autocast_ctx = (
+        torch.autocast(device_type="cuda", dtype=torch.float16)
+        if use_cuda
+        else nullcontext()
+    )
 
     fused_chunks: list[torch.Tensor] = []
     scope_targets = torch.as_tensor(
         [SCOPE_CLASSES.index(s) for s in dataframe["scope"].tolist()],
         dtype=torch.long,
     )
+    seq_len_sum = 0  # сумма реальных длин — для лога эффективности padding.
+    seq_len_max = 0
     start = time.perf_counter()
     progress = tqdm(
         loader,
@@ -203,26 +254,36 @@ def cache_fused_features(
     )
     seen = 0
     for batch in progress:
-        input_ids = batch["input_ids"].to(device)
-        attention_mask = batch["attention_mask"].to(device)
-        cwe_idx = batch["cwe_idx"].to(device)
-        features = batch["features"].to(device)
+        input_ids = batch["input_ids"].to(device, non_blocking=use_cuda)
+        attention_mask = batch["attention_mask"].to(device, non_blocking=use_cuda)
+        cwe_idx = batch["cwe_idx"].to(device, non_blocking=use_cuda)
+        features = batch["features"].to(device, non_blocking=use_cuda)
 
-        h_text = model.encode_text(input_ids, attention_mask)
-        h_feat = model.features_mlp(features, cwe_idx)
-        h_fused = model.fusion(h_text, h_feat)  # [B, 512]
-        fused_chunks.append(h_fused.detach().to("cpu"))
-        seen += input_ids.shape[0]
-        progress.set_postfix(records=seen)
+        with autocast_ctx:
+            h_text = model.encode_text(input_ids, attention_mask)
+            h_feat = model.features_mlp(features, cwe_idx)
+            h_fused = model.fusion(h_text, h_feat)  # [B, 512]
+        # Кэш в fp32 — линейная голова обучается стабильнее на полной точности.
+        fused_chunks.append(h_fused.float().detach().to("cpu"))
+        bs = input_ids.shape[0]
+        seen += bs
+        seq_len_sum += int(attention_mask.sum().item())
+        seq_len_max = max(seq_len_max, input_ids.shape[1])
+        progress.set_postfix(records=seen, seq_len=input_ids.shape[1])
 
     fused = torch.cat(fused_chunks, dim=0)  # [N, 512]
     elapsed = time.perf_counter() - start
+    avg_len = seq_len_sum / max(seen, 1)
     logger.info(
-        "Кэширование %s завершено: %d записей за %.1f сек (%.1f rec/sec)",
+        "Кэширование %s завершено: %d записей за %.1f сек (%.1f rec/sec); "
+        "ср. длина %.0f токенов, макс %d (padding до 512 сэкономил ~%.1fx)",
         desc,
         fused.shape[0],
         elapsed,
         fused.shape[0] / max(elapsed, 1e-6),
+        avg_len,
+        seq_len_max,
+        512.0 / max(avg_len, 1.0),
     )
     return fused, scope_targets
 
@@ -387,6 +448,7 @@ def run(
     patience: int = 3,
     seed: int = 42,
     max_length: int = 512,
+    num_workers: int = 2,
     debug: bool = False,
 ) -> dict[str, Any]:
     """Обучение Scope-головы без argparse — удобно для ноутбуков и тестов."""
@@ -430,13 +492,13 @@ def run(
     train_fused, train_targets = cache_fused_features(
         model, train_df, tokenizer, cwe_encoder, features_encoder, text_processor,
         device=device, batch_size=batch_size_cache, max_length=max_length,
-        desc="train",
+        num_workers=num_workers, desc="train",
     )
     logger.info("Кэширую val fused...")
     val_fused, val_targets = cache_fused_features(
         model, val_df, tokenizer, cwe_encoder, features_encoder, text_processor,
         device=device, batch_size=batch_size_cache, max_length=max_length,
-        desc="val",
+        num_workers=num_workers, desc="val",
     )
 
     # ----- 4) Обучение линейной головы
@@ -474,7 +536,7 @@ def run(
             "epochs": epochs, "batch_size_train": batch_size_train,
             "batch_size_cache": batch_size_cache, "lr": lr,
             "weight_decay": weight_decay, "patience": patience,
-            "seed": seed, "max_length": max_length,
+            "seed": seed, "max_length": max_length, "num_workers": num_workers,
         },
         "history": {
             "train_loss": history["train_loss"], "val_loss": history["val_loss"],
@@ -518,6 +580,8 @@ def _parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--patience", type=int, default=3)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--max-length", type=int, default=512)
+    parser.add_argument("--num-workers", type=int, default=2,
+                        help="воркеры DataLoader для фоновой токенизации при кэшировании")
     parser.add_argument("--debug", action="store_true",
                         help="20 train + 10 val + 1 эпоха (smoke test)")
     return parser.parse_args(argv)
@@ -546,6 +610,7 @@ def main(argv: list[str] | None = None) -> int:
         patience=args.patience,
         seed=args.seed,
         max_length=args.max_length,
+        num_workers=args.num_workers,
         debug=args.debug,
     )
     # Дублируем сводку в JSON для удобства.
