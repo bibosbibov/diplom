@@ -16,6 +16,7 @@
         "state_dict": {"weight": tensor[2, 512], "bias": tensor[2]},
         "classes": ["U", "C"],
         "trained_from": "<путь к stage1 чекпойнту>",
+        "stage1_fingerprint": "<sha256 весов backbone — для сверки в предикторе>",
         "val_accuracy": float,
         "val_f1_macro": float,
         "n_train": int,
@@ -69,7 +70,7 @@ from src.data_preparation import (
     FeaturesEncoder,
     TextProcessor,
 )
-from src.model import CVSSModel
+from src.model import CVSSModel, backbone_fingerprint
 from src.training.utils import get_device, set_seed
 
 logger = logging.getLogger(__name__)
@@ -524,6 +525,9 @@ def run(
 
     metadata = {
         "trained_from": str(stage1_path),
+        # Отпечаток весов backbone — предиктор сверяет его при загрузке, чтобы
+        # голову не прицепили к чужому stage 1 (см. src/model/fingerprint.py).
+        "stage1_fingerprint": backbone_fingerprint(model.state_dict()),
         "val_accuracy": final_acc,
         "val_f1_macro": final_f1,
         "n_train": int(len(train_df)),

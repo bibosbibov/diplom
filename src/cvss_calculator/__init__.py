@@ -9,6 +9,7 @@
 """
 
 from .calculator import CVSSCalculator
+from .cvss31 import CVSS31Calculator
 from .core import (
     CVSS4,
     CVSS4Error,
@@ -22,6 +23,7 @@ from .core import (
 
 __all__ = [
     "CVSSCalculator",
+    "CVSS31Calculator",
     "CVSS4",
     "CVSSError",
     "CVSS4Error",
