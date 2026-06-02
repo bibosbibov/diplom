@@ -46,11 +46,14 @@ from .training_curves import (
 
 try:  # torch / transformers — опциональны для расчётной части
     from .evaluator import Evaluator
+    from .evaluate_v31 import V31Evaluator
 except ImportError:  # pragma: no cover
     Evaluator = None  # type: ignore[assignment, misc]
+    V31Evaluator = None  # type: ignore[assignment, misc]
 
 __all__ = [
     "Evaluator",
+    "V31Evaluator",
     # metrics
     "BASE_VECTOR_METRICS",
     "SEVERITY_ORDER",

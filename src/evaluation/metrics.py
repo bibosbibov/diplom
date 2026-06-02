@@ -113,12 +113,15 @@ def _check_pair_length(a: Sequence, b: Sequence, name_a: str, name_b: str) -> No
 def compute_vector_accuracy(
     y_true_vectors: Sequence[Mapping[str, str]],
     y_pred_vectors: Sequence[Mapping[str, str]],
+    metrics: Sequence[str] = BASE_VECTOR_METRICS,
 ) -> float:
-    """Доля записей, где совпали ВСЕ 11 базовых метрик (без E).
+    """Доля записей, где совпали ВСЕ базовые метрики из ``metrics``.
 
     Args:
         y_true_vectors: список словарей ``{"AV": "N", "AC": "L", ...}``.
         y_pred_vectors: предсказанные словари той же длины.
+        metrics: набор метрик для проверки совпадения. По умолчанию — 11
+            базовых метрик CVSS v4.0; для v3.1 передаётся свой набор из 8.
 
     Returns:
         Число от 0.0 до 1.0. Для пустого входа — 0.0.
@@ -131,7 +134,7 @@ def compute_vector_accuracy(
     exact = sum(
         1
         for true_v, pred_v in zip(y_true_vectors, y_pred_vectors)
-        if all(true_v.get(m) == pred_v.get(m) for m in BASE_VECTOR_METRICS)
+        if all(true_v.get(m) == pred_v.get(m) for m in metrics)
     )
     return exact / len(y_true_vectors)
 
@@ -139,25 +142,30 @@ def compute_vector_accuracy(
 def compute_partial_accuracy(
     y_true_vectors: Sequence[Mapping[str, str]],
     y_pred_vectors: Sequence[Mapping[str, str]],
+    metrics: Sequence[str] = BASE_VECTOR_METRICS,
 ) -> dict:
     """Среднее число верных метрик на запись и доля идеальных совпадений.
+
+    Args:
+        y_true_vectors / y_pred_vectors: списки словарей метрик.
+        metrics: набор базовых метрик (по умолчанию 11 для v4.0; для v3.1 — 8).
 
     Returns:
         dict с ключами:
             * ``"metrics_correct_per_sample"`` — среднее число совпавших
-              базовых метрик на запись (от 0 до 11);
-            * ``"perfect_match_ratio"`` — доля записей, где совпали все 11
+              базовых метрик на запись (от 0 до ``len(metrics)``);
+            * ``"perfect_match_ratio"`` — доля записей, где совпали все
               (то же, что :func:`compute_vector_accuracy`).
     """
     y_true_vectors = list(y_true_vectors)
     y_pred_vectors = list(y_pred_vectors)
     _check_pair_length(y_true_vectors, y_pred_vectors, "y_true_vectors", "y_pred_vectors")
-    n_metrics = len(BASE_VECTOR_METRICS)
+    n_metrics = len(metrics)
     if not y_true_vectors:
         return {"metrics_correct_per_sample": 0.0, "perfect_match_ratio": 0.0}
 
     correct_per_sample = [
-        sum(1 for m in BASE_VECTOR_METRICS if true_v.get(m) == pred_v.get(m))
+        sum(1 for m in metrics if true_v.get(m) == pred_v.get(m))
         for true_v, pred_v in zip(y_true_vectors, y_pred_vectors)
     ]
     perfect = sum(1 for c in correct_per_sample if c == n_metrics)

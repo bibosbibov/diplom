@@ -154,36 +154,34 @@ class MLService:
         start = time.perf_counter()
         responses: list[PredictionResponse | None] = [None] * len(requests)
 
-        v4_items: list[dict[str, Any]] = []
-        v4_positions: list[int] = []
+        # Группируем по версии: каждый предиктор обрабатывает свою группу
+        # batch-инференсом, порядок восстанавливаем по позициям.
+        groups: dict[str, tuple[list[int], list[dict[str, Any]]]] = {
+            "4.0": ([], []),
+            "3.1": ([], []),
+        }
         for i, r in enumerate(requests):
-            if r.cvss_version == "3.1":
-                result = self._predictor_for("3.1").predict(
-                    description=r.description,
-                    cwe_id=r.cwe_id,
-                    description_ru=r.description_ru,
-                    epss=r.epss,
-                    kev=int(r.kev) if r.kev is not None else None,
-                    exploit=int(r.exploit) if r.exploit is not None else None,
-                )
-                responses[i] = self._to_response(result, 0.0, "3.1")
-            else:
-                v4_positions.append(i)
-                v4_items.append(
-                    {
-                        "description": r.description,
-                        "cwe_id": r.cwe_id,
-                        "description_ru": r.description_ru,
-                        "epss": r.epss,
-                        "kev": int(r.kev) if r.kev is not None else None,
-                        "exploit": int(r.exploit) if r.exploit is not None else None,
-                    }
-                )
+            version = r.cvss_version if r.cvss_version in groups else "4.0"
+            positions, items = groups[version]
+            positions.append(i)
+            items.append(
+                {
+                    "description": r.description,
+                    "cwe_id": r.cwe_id,
+                    "description_ru": r.description_ru,
+                    "epss": r.epss,
+                    "kev": int(r.kev) if r.kev is not None else None,
+                    "exploit": int(r.exploit) if r.exploit is not None else None,
+                }
+            )
 
-        if v4_items:
-            v4_results = self.predictor.predict_batch(v4_items)
-            for pos, result in zip(v4_positions, v4_results):
-                responses[pos] = self._to_response(result, 0.0, "4.0")
+        for version, (positions, items) in groups.items():
+            if not items:
+                continue
+            predictor = self._predictor_for(version)
+            batch_results = predictor.predict_batch(items)
+            for pos, result in zip(positions, batch_results):
+                responses[pos] = self._to_response(result, 0.0, version)
 
         total_ms = (time.perf_counter() - start) * 1000.0
         per_item_ms = round(total_ms / max(len(requests), 1), 2)

@@ -42,7 +42,7 @@ def test_decode_maps_heads_and_scope() -> None:
     }
     scope_logits = torch.tensor([[-5.0, 5.0]])  # → C
 
-    metrics, confidence = obj._decode(head_logits, scope_logits)
+    metrics, confidence = obj._decode_row(head_logits, scope_logits, 0)
 
     assert metrics == {
         "AV": "N", "AC": "H", "PR": "N", "UI": "R",
