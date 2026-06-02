@@ -162,7 +162,47 @@
     }
     .version-toggle label + label { border-left: 1px solid var(--border); }
     .version-toggle input:checked + label { background: var(--accent); color: #fff; }
-    .version-hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+    .fstec-context {
+      margin-top: 16px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: #fafbfc;
+    }
+    .fstec-note { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+    .fstec-suggest { color: var(--accent); font-weight: 400; font-size: 12px; }
+    #flags-group { display: flex; gap: 24px; flex-wrap: wrap; }
+    label.checkbox {
+      display: flex; align-items: center; gap: 8px;
+      font-weight: 500; cursor: pointer; padding: 6px 0; margin: 0;
+    }
+    label.checkbox input[type="checkbox"] { width: 18px; height: 18px; }
+    .fstec-loading { color: var(--muted); font-size: 13px; }
+    .fstec-field { margin-bottom: 14px; }
+    .fstec-field > .fstec-field-title {
+      font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block;
+    }
+    .fstec-field-title .wkey { color: var(--accent); }
+    .fstec-options {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 2px 16px;
+    }
+    .fstec-options label {
+      display: flex; align-items: flex-start; gap: 10px;
+      font-weight: 500; font-size: 13px; cursor: pointer; margin: 0;
+      padding: 8px 10px; border-radius: 6px; border: 1px solid transparent;
+    }
+    .fstec-options label:hover { background: #f3f4f6; }
+    .fstec-options label:has(input:checked) { background: #eef2ff; border-color: #c7d2fe; }
+    .fstec-options input { width: 18px; height: 18px; margin-top: 1px; flex-shrink: 0; accent-color: var(--accent); }
+    .fstec-options .val { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
+    .calc-steps {
+      background: #f3f4f6; border: 1px solid var(--border); border-radius: 6px;
+      padding: 12px 14px; margin-bottom: 18px; font-size: 14px;
+      font-family: "Consolas","Menlo",monospace; line-height: 1.7;
+    }
+    .calc-steps .muted { color: var(--muted); }
     .loader {
       display: none;
       text-align: center;
@@ -310,14 +350,15 @@
       <h2>Параметры уязвимости</h2>
       <form id="predict-form">
         <div class="form-group">
-          <label>Версия CVSS</label>
-          <div class="version-toggle" role="radiogroup" aria-label="Версия CVSS">
+          <label>Режим оценки</label>
+          <div class="version-toggle" role="radiogroup" aria-label="Режим оценки">
             <input type="radio" name="cvss_version" id="ver-4" value="4.0" checked />
             <label for="ver-4">CVSS v4.0</label>
             <input type="radio" name="cvss_version" id="ver-31" value="3.1" />
             <label for="ver-31">CVSS v3.1</label>
+            <input type="radio" name="cvss_version" id="ver-fstec" value="fstec" />
+            <label for="ver-fstec">Методика ФСТЭК</label>
           </div>
-          <div class="version-hint" id="version-hint">12 метрик, итоговый балл по спецификации FIRST v4.0.</div>
         </div>
 
         <div class="form-group">
@@ -325,51 +366,22 @@
           <textarea
             id="description"
             name="description"
-            placeholder="SQL injection in login form allows authentication bypass via crafted POST request..."
+            placeholder="Опишите уязвимость…"
             required
             minlength="10"
             maxlength="10000"
-          >SQL injection vulnerability in the login form allows remote attackers to bypass authentication and access the admin panel via crafted POST requests with malicious payloads in the username parameter.</textarea>
+          >Уязвимость операционных систем FortiOS связана с некорректным присваиванием привилегий. Эксплуатация уязвимости может позволить нарушителю, действующему удаленно, повысить свои привилегии.</textarea>
         </div>
 
         <div class="form-row">
           <div class="form-group">
             <label for="cwe_id">Тип уязвимости (CWE)</label>
             <select id="cwe_id" name="cwe_id" required>
-              <option value="CWE-79">CWE-79 — Cross-site Scripting (XSS)</option>
-              <option value="CWE-89" selected>CWE-89 — SQL Injection</option>
-              <option value="CWE-787">CWE-787 — Out-of-bounds Write</option>
-              <option value="CWE-22">CWE-22 — Path Traversal</option>
-              <option value="CWE-352">CWE-352 — Cross-Site Request Forgery (CSRF)</option>
-              <option value="CWE-78">CWE-78 — OS Command Injection</option>
-              <option value="CWE-94">CWE-94 — Code Injection</option>
-              <option value="CWE-119">CWE-119 — Buffer Overflow</option>
-              <option value="CWE-200">CWE-200 — Information Disclosure</option>
-              <option value="CWE-287">CWE-287 — Authentication Bypass</option>
-              <option value="CWE-862">CWE-862 — Missing Authorization</option>
-              <option value="CWE-918">CWE-918 — Server-Side Request Forgery (SSRF)</option>
-              <option value="CWE-269">CWE-269 — Improper Privilege Management</option>
-              <option value="CWE-502">CWE-502 — Deserialization of Untrusted Data</option>
-              <option value="CWE-77">CWE-77 — Command Injection</option>
-              <option value="CWE-125">CWE-125 — Out-of-bounds Read</option>
-              <option value="CWE-416">CWE-416 — Use After Free</option>
-              <option value="CWE-190">CWE-190 — Integer Overflow</option>
-              <option value="CWE-863">CWE-863 — Incorrect Authorization</option>
-              <option value="CWE-732">CWE-732 — Incorrect Permission Assignment</option>
-              <option value="CWE-20">CWE-20 — Improper Input Validation</option>
-              <option value="CWE-434">CWE-434 — Unrestricted File Upload</option>
-              <option value="CWE-400">CWE-400 — Uncontrolled Resource Consumption</option>
-              <option value="CWE-611">CWE-611 — XML External Entity (XXE)</option>
-              <option value="CWE-601">CWE-601 — Open Redirect</option>
-              <option value="CWE-798">CWE-798 — Hardcoded Credentials</option>
-              <option value="CWE-522">CWE-522 — Insufficiently Protected Credentials</option>
-              <option value="CWE-639">CWE-639 — Authorization Bypass Through User-Controlled Key</option>
-              <option value="CWE-754">CWE-754 — Improper Check for Unusual Conditions</option>
-              <option value="CWE-264">CWE-264 — Permissions, Privileges, and Access Controls</option>
+              <option value="CWE-89">Загрузка списка CWE…</option>
             </select>
           </div>
           <div class="form-group">
-            <label for="epss">EPSS (вероятность эксплуатации)</label>
+            <label for="epss">Вероятность эксплуатации</label>
             <div class="slider-wrap">
               <input type="range" id="epss" name="epss" min="0" max="1" step="0.01" value="0" />
               <span class="val" id="epss-val">—</span>
@@ -378,17 +390,31 @@
           </div>
         </div>
 
-        <div class="extras">
-          <div>
-            <label class="checkbox">
-              <input type="checkbox" id="kev" />
-              CISA KEV (подтверждённая эксплуатация)
-            </label>
-            <label class="checkbox">
-              <input type="checkbox" id="exploit" />
-              Публичный эксплойт (ExploitDB)
-            </label>
+        <div class="form-group" id="flags-group">
+          <label class="checkbox">
+            <input type="checkbox" id="kev" />
+            Эксплуатация в реальных атаках
+          </label>
+          <label class="checkbox">
+            <input type="checkbox" id="exploit" />
+            Наличие эксплойта
+          </label>
+        </div>
+
+        <div id="fstec-context" class="fstec-context" style="display:none">
+          <div class="fstec-note">
+            Балл CVSS 3.1 предсказывается моделью. Укажите контекст информационной
+            системы (Таблица 1 Методики ФСТЭК от 30.06.2025): K, L, H — можно выбрать
+            несколько (берётся наибольшее значение), P — один вариант.
+            <br>Эксплуатация (E) определяется по отметкам «Эксплуатация в реальных атаках» /
+            «Наличие эксплойта» выше:
+            <span id="fstec-e-info" class="fstec-suggest"></span>
           </div>
+          <div id="fstec-fields"><div class="fstec-loading">Загрузка показателей…</div></div>
+        </div>
+
+        <div class="extras">
+          <div></div>
           <div></div>
           <div>
             <button type="submit" class="primary" id="submit-btn">Оценить</button>
@@ -412,12 +438,14 @@
         <div class="score" id="score-text">—</div>
       </div>
 
-      <div class="vector-block">
+      <div class="vector-block" id="vector-block">
         <code id="vector-text">—</code>
         <button type="button" class="secondary" id="copy-btn">Скопировать</button>
       </div>
 
-      <table class="metrics">
+      <div id="fstec-steps" class="calc-steps" style="display:none"></div>
+
+      <table class="metrics" id="metrics-table">
         <thead>
           <tr>
             <th>Метрика</th>
@@ -465,9 +493,16 @@
       "4.0": ["AV","AC","AT","PR","UI","VC","VI","VA","SC","SI","SA","E"],
       "3.1": ["AV","AC","PR","UI","S","C","I","A"],
     };
-    const VERSION_HINTS = {
-      "4.0": "12 метрик, итоговый балл по спецификации FIRST v4.0.",
-      "3.1": "8 базовых метрик (Scope предсказывается отдельной головой), балл по спецификации FIRST v3.1.",
+    // Уровень ФСТЭК → цветовой класс бейджа (переиспользуем шкалу severity).
+    const FSTEC_LEVEL_SEV = {
+      "Критический": "Critical", "Высокий": "High", "Средний": "Medium", "Низкий": "Low",
+    };
+    const FSTEC_TITLES = {
+      K: "тип компонента, подверженного уязвимости",
+      L: "доля уязвимых компонентов",
+      P: "доступность из сети «Интернет»",
+      E: "сведения об эксплуатации",
+      H: "последствия эксплуатации",
     };
 
     function selectedVersion() {
@@ -494,10 +529,106 @@
       epssVal.textContent = "—";
     });
 
-    document.querySelectorAll('input[name="cvss_version"]').forEach((radio) => {
-      radio.addEventListener("change", () => {
-        $("#version-hint").textContent = VERSION_HINTS[selectedVersion()] || "";
+    let fstecOptionsLoaded = false;
+    async function loadFstecOptions() {
+      if (fstecOptionsLoaded) return;
+      try {
+        const resp = await fetch("/fstec/options");
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        buildFstecFields(await resp.json());
+        fstecOptionsLoaded = true;
+      } catch (err) {
+        $("#fstec-fields").innerHTML =
+          '<div class="fstec-loading">Не удалось загрузить показатели: ' + err.message + "</div>";
+      }
+    }
+
+    function buildFstecFields(catalog) {
+      const container = $("#fstec-fields");
+      container.innerHTML = "";
+      // E на экране не показываем — он выводится из флагов CISA KEV / ExploitDB.
+      for (const key of ["K", "L", "P", "H"]) {
+        const cfg = catalog[key];
+        if (!cfg) continue;
+        const single = !cfg.multiselect;  // P — одиночный выбор
+        const opts = cfg.options.map((o, i) => {
+          // У одиночного показателя (P) по умолчанию отмечаем последний вариант.
+          const checked = single && i === cfg.options.length - 1 ? "checked" : "";
+          return `<label><input type="checkbox" name="fstec-${key}" value="${o.code}"`
+               + `${checked}${single ? ' data-single="1"' : ''}/>`
+               + `<span>${o.label} <span class="val">(${o.value})</span></span></label>`;
+        }).join("");
+        const field = document.createElement("div");
+        field.className = "fstec-field";
+        field.innerHTML =
+          `<span class="fstec-field-title"><span class="wkey">${key}</span> — ${FSTEC_TITLES[key]} `
+          + `<span class="val" style="font-weight:400">· вес ${cfg.weight}`
+          + (single ? ", выберите один" : ", можно несколько (берётся максимум)") + `</span>`
+          + `<span class="fstec-suggest" id="fstec-suggest-${key}"></span></span>`
+          + `<div class="fstec-options">${opts}</div>`;
+        container.appendChild(field);
+        if (single) {
+          // Имитируем одиночный выбор галочками: отметка одной снимает остальные.
+          const inputs = field.querySelectorAll('input[data-single="1"]');
+          inputs.forEach((inp) =>
+            inp.addEventListener("change", () => {
+              if (inp.checked) inputs.forEach((o) => { if (o !== inp) o.checked = false; });
+            })
+          );
+        }
+      }
+    }
+
+    function gatherFstec(key) {
+      return Array.from(
+        document.querySelectorAll(`input[name="fstec-${key}"]:checked`)
+      ).map((el) => el.value);
+    }
+
+    // Отмечает в группе показателя ровно предложенные коды (E/H предзаполняются,
+    // но остаются редактируемыми пользователем).
+    function applyFstecSuggestion(group, codes) {
+      const set = new Set(codes || []);
+      document.querySelectorAll(`input[name="fstec-${group}"]`).forEach((b) => {
+        b.checked = set.has(b.value);
       });
+    }
+
+    // E — по флагам KEV/ExploitDB, H — по CWE. Источник показываем пометкой.
+    async function refreshFstecSuggestions() {
+      if (selectedVersion() !== "fstec" || !fstecOptionsLoaded) return;
+      const params = new URLSearchParams({
+        cwe_id: $("#cwe_id").value,
+        kev: $("#kev").checked,
+        exploit: $("#exploit").checked,
+      });
+      try {
+        const resp = await fetch("/fstec/suggest?" + params.toString());
+        if (!resp.ok) return;
+        const s = await resp.json();
+        // E на экране нет (выводится из KEV/ExploitDB на сервере) — заполняем только H.
+        applyFstecSuggestion("H", s.h.codes);
+        const hNote = $("#fstec-suggest-H");
+        if (hNote) hNote.textContent = s.h.source ? " · " + s.h.source : "";
+        // Подсказываем, как сейчас определилась эксплуатация (E).
+        const eInfo = $("#fstec-e-info");
+        if (eInfo) eInfo.textContent = s.e.source;
+      } catch (_) { /* подсказки необязательны — режим работает и без них */ }
+    }
+
+    function updateModeUI() {
+      const v = selectedVersion();
+      $("#fstec-context").style.display = v === "fstec" ? "block" : "none";
+      if (v === "fstec") loadFstecOptions().then(refreshFstecSuggestions);
+    }
+
+    document.querySelectorAll('input[name="cvss_version"]').forEach((radio) => {
+      radio.addEventListener("change", updateModeUI);
+    });
+    // Изменение CWE / флагов KEV/ExploitDB → пересчёт предложений E и H.
+    ["#cwe_id", "#kev", "#exploit"].forEach((sel) => {
+      const el = $(sel);
+      if (el) el.addEventListener("change", refreshFstecSuggestions);
     });
 
     function showToast(message) {
@@ -514,6 +645,9 @@
     }
 
     function renderResult(data) {
+      $("#metrics-table").style.display = "";
+      $("#fstec-steps").style.display = "none";
+      $("#vector-block").style.display = "";
       const badge = $("#severity-badge");
       badge.className = "severity-badge sev-" + data.severity;
       $("#severity-text").textContent = data.severity;
@@ -544,26 +678,71 @@
       resultEl.classList.add("visible");
     }
 
+    function renderFstecResult(data) {
+      const sev = FSTEC_LEVEL_SEV[data.level] || "None";
+      $("#severity-badge").className = "severity-badge sev-" + sev;
+      $("#severity-text").textContent = data.level;
+      $("#score-text").textContent = data.v.toFixed(2);
+
+      $("#vector-block").style.display = "";
+      $("#vector-text").textContent = data.cvss31_vector;
+      $("#metrics-table").style.display = "none";
+
+      const b = data.breakdown;
+      const f = (x, d = 2) => Number(x).toFixed(d);
+      const steps = $("#fstec-steps");
+      steps.style.display = "";
+      steps.innerHTML =
+        `I_cvss = <b>${f(data.i_cvss, 1)}</b> <span class="muted">(базовый балл CVSS 3.1, ${data.cvss31_severity})</span><br>` +
+        `I_infr = k·K + l·L + p·P = 0.5·${f(b.k_value)} + 0.2·${f(b.l_value)} + 0.3·${f(b.p_value)} ` +
+        `= ${f(b.k_term)} + ${f(b.l_term)} + ${f(b.p_term)} = <b>${f(data.i_infr)}</b><br>` +
+        `I_at = e·E = 1.0·${f(b.e_value)} = <b>${f(data.i_at)}</b><br>` +
+        `I_imp = h·H = 1.0·${f(b.h_value)} = <b>${f(data.i_imp)}</b><br>` +
+        `V = I_cvss · I_infr · (I_at + I_imp) = ${f(data.i_cvss, 1)} · ${f(data.i_infr)} · (${f(data.i_at)} + ${f(data.i_imp)}) = <b>${f(data.v)}</b><br>` +
+        `<span class="muted">Уровень (Таблица 2): <b>${data.level}</b></span>`;
+
+      $("#lowconf-text").textContent = "Методика ФСТЭК России от 30.06.2025";
+      $("#inftime-text").textContent =
+        "Время инференса CVSS 3.1: " + data.inference_time_ms.toFixed(1) + " мс";
+      resultEl.classList.add("visible");
+    }
+
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const description = $("#description").value.trim();
       const cwe_id = $("#cwe_id").value;
       const kev = $("#kev").checked;
       const exploit = $("#exploit").checked;
-      const payload = {
-        description,
-        cwe_id,
-        cvss_version: selectedVersion(),
+      const version = selectedVersion();
+      const features = {
         kev: kev ? true : null,
         exploit: exploit ? true : null,
         epss: epssEnabled ? Number(epssInput.value) : null,
       };
 
+      let endpoint, payload, renderFn;
+      if (version === "fstec") {
+        const k = gatherFstec("K"), l = gatherFstec("L"), p = gatherFstec("P"),
+              h = gatherFstec("H");
+        if (!k.length || !l.length || !p.length || !h.length) {
+          showToast("Выберите хотя бы один вариант в K, L, P и H");
+          return;
+        }
+        endpoint = "/fstec";
+        // E не передаём — сервер выведет его из флагов CISA KEV / ExploitDB.
+        payload = { description, cwe_id, ...features, k, l, p: p[0], h };
+        renderFn = renderFstecResult;
+      } else {
+        endpoint = "/predict";
+        payload = { description, cwe_id, cvss_version: version, ...features };
+        renderFn = renderResult;
+      }
+
       submitBtn.disabled = true;
       resultEl.classList.remove("visible");
       loader.classList.add("visible");
       try {
-        const response = await fetch("/predict", {
+        const response = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
@@ -579,8 +758,7 @@
           } catch (_) { msg = text || msg; }
           throw new Error(msg);
         }
-        const data = await response.json();
-        renderResult(data);
+        renderFn(await response.json());
       } catch (err) {
         showToast("Ошибка: " + err.message);
       } finally {
@@ -599,6 +777,26 @@
         showToast("Не удалось скопировать вектор");
       }
     });
+
+    // Список CWE подгружается с бэкенда (/cwe): известные модели CWE с именами
+    // MITRE, отсортированные по номеру. Защищаемся от пустого ответа.
+    async function loadCweCatalog() {
+      const select = $("#cwe_id");
+      const DEFAULT_CWE = "CWE-266";  // соответствует дефолтному описанию из БДУ (BDU:2025-01611)
+      try {
+        const resp = await fetch("/cwe");
+        if (!resp.ok) throw new Error("HTTP " + resp.status);
+        const list = await resp.json();
+        if (!Array.isArray(list) || !list.length) return;
+        select.innerHTML = list
+          .map((c) => `<option value="${c.id}"${c.id === DEFAULT_CWE ? " selected" : ""}>`
+                    + `${c.id} — ${c.name}</option>`)
+          .join("");
+      } catch (err) {
+        showToast("Не удалось загрузить список CWE: " + err.message);
+      }
+    }
+    loadCweCatalog();
   </script>
 </body>
 </html>

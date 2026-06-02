@@ -46,6 +46,10 @@ class CWENameLookup:
             return None
         return self._load().get(f"CWE-{match.group(1)}")
 
+    def all(self) -> dict[str, str]:
+        """Полный словарь ``{"CWE-NNN": имя}`` (копия)."""
+        return dict(self._load())
+
     @property
     def available(self) -> bool:
         """``True``, если словарь успешно загружен и непуст."""

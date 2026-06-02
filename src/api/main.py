@@ -21,6 +21,8 @@ from fastapi.staticfiles import StaticFiles
 from .ml_service import MLService
 from .schemas import (
     BatchPredictionRequest,
+    FSTECRequest,
+    FSTECResponse,
     HealthResponse,
     ModelInfoResponse,
     PredictionRequest,
@@ -105,6 +107,68 @@ def predict_batch(request: BatchPredictionRequest) -> list[PredictionResponse]:
     except Exception as exc:  # pragma: no cover
         logger.exception("Ошибка при пакетном предсказании")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.post("/fstec", response_model=FSTECResponse)
+def fstec(request: FSTECRequest) -> FSTECResponse:
+    """Оценка уровня критичности по Методике ФСТЭК России (30.06.2025).
+
+    Балл CVSS 3.1 предсказывается моделью v3.1 по описанию и CWE; контекстные
+    показатели K/L/P/E/H (тип компонента, доля уязвимых компонентов, доступность
+    из Интернета, сведения об эксплуатации, последствия) передаёт пользователь.
+
+    Args:
+        request: :class:`FSTECRequest` — описание, CWE и коды показателей.
+
+    Returns:
+        :class:`FSTECResponse` с уровнем V, наименованием уровня и пошаговой
+        разбивкой расчёта.
+
+    Raises:
+        HTTPException 400: неизвестный код показателя / пустой мультивыбор.
+        HTTPException 500: внутренняя ошибка.
+    """
+    try:
+        return MLService.get_instance().assess_fstec(request)
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # pragma: no cover
+        logger.exception("Ошибка при оценке по Методике ФСТЭК")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@app.get("/fstec/options")
+def fstec_options() -> dict:
+    """Каталог показателей Таблицы 1 Методики ФСТЭК (для построения формы UI).
+
+    Returns:
+        Словарь ``{K|L|P|E|H: {weight, multiselect, options:[{code,label,value}]}}``.
+    """
+    # Каталог статичен и не требует загрузки модели — зовём staticmethod напрямую.
+    return MLService.fstec_options()
+
+
+@app.get("/cwe")
+def cwe_catalog() -> list[dict]:
+    """Список CWE (id + имя) для выпадающего списка UI.
+
+    Возвращает CWE, известные модели (из ``cwe_vocab.json``), с человекочитаемыми
+    именами MITRE, отсортированные по номеру. Модель не загружается.
+    """
+    return MLService.cwe_catalog()
+
+
+@app.get("/fstec/suggest")
+def fstec_suggest(cwe_id: str, kev: bool = False, exploit: bool = False) -> dict:
+    """Предзаполнение показателей ФСТЭК E и H (редактируемое пользователем).
+
+    E — по флагам ``kev``/``exploit`` (CISA KEV / ExploitDB); H — по типу CWE.
+    Возвращает ``{e:{codes,source}, h:{codes,source}}``. Только подсказка —
+    итоговое решение за специалистом (п.9 Методики). Модель не загружается.
+    """
+    return MLService.fstec_suggest(cwe_id=cwe_id, kev=kev, exploit=exploit)
 
 
 @app.get("/health", response_model=HealthResponse)

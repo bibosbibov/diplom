@@ -10,6 +10,7 @@
 
 from .calculator import CVSSCalculator
 from .cvss31 import CVSS31Calculator
+from .fstec_criticality import FSTECCriticalityCalculator, FSTECResult
 from .core import (
     CVSS4,
     CVSS4Error,
@@ -24,6 +25,8 @@ from .core import (
 __all__ = [
     "CVSSCalculator",
     "CVSS31Calculator",
+    "FSTECCriticalityCalculator",
+    "FSTECResult",
     "CVSS4",
     "CVSSError",
     "CVSS4Error",

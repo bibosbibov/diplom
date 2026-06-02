@@ -14,8 +14,19 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from ..cvss_calculator import FSTECCriticalityCalculator
+from ..cvss_calculator.fstec_criticality import (
+    INDICATOR_CATALOG,
+    Option,
+    suggest_e,
+    suggest_h,
+)
+from ..data_preparation.cwe_names_lookup import CWENameLookup
 from ..inference import VulnerabilityPredictor, VulnerabilityPredictorV31
 from .schemas import (
+    FSTECBreakdown,
+    FSTECRequest,
+    FSTECResponse,
     HealthResponse,
     MetricPrediction,
     ModelInfoResponse,
@@ -35,6 +46,8 @@ DEFAULT_STAGE1_PATH = ROOT / "models" / "dapt_mbert" / "best_stage1.pt"
 DEFAULT_SCOPE_HEAD_PATH = ROOT / "models" / "scope_head_v3.pt"
 # Словарь CWE-имён для подстановки cwe_name в текст (общий для обоих предикторов).
 DEFAULT_CWE_NAMES_PATH = ROOT / "data" / "raw" / "cwe_names.json"
+# Русские названия CWE из выгрузки БДУ ФСТЭК — для отображения в UI.
+DEFAULT_CWE_NAMES_RU_PATH = ROOT / "data" / "raw" / "cwe_names_ru.json"
 
 
 class MLService:
@@ -71,6 +84,8 @@ class MLService:
         # v3.1-предиктор грузится лениво при первом запросе с cvss_version="3.1"
         # (ещё ~700 МБ stage 1 backbone + Scope-голова — не держим зря).
         self._predictor_v31: VulnerabilityPredictorV31 | None = None
+        # Калькулятор Методики ФСТЭК — без ML, создаётся сразу.
+        self._fstec_calc = FSTECCriticalityCalculator()
         self._test_metrics: dict[str, Any] = {}
         self._training_completed: str = "unknown"
         self._num_parameters: int = 0
@@ -195,6 +210,131 @@ class MLService:
             if resp is not None:
                 resp.inference_time_ms = per_item_ms
         return [resp for resp in responses if resp is not None]
+
+    def assess_fstec(self, request: FSTECRequest) -> FSTECResponse:
+        """Оценка по Методике ФСТЭК: балл CVSS 3.1 из модели + контекст K/L/P/E/H.
+
+        Балл CVSS 3.1 предсказывается v3.1-моделью (переиспользуем существующий
+        предиктор), затем подставляется как I_cvss в формулу п.12 Методики.
+        """
+        # E на фронте не выбирается — выводим его из флагов CISA KEV / ExploitDB
+        # (если e всё же передан явно — используем его). См. suggest_e (п.16).
+        e_codes = request.e or suggest_e(request.kev, request.exploit)
+
+        # Сначала валидируем контекстные коды — чтобы при ошибке вернуть 400
+        # и не грузить впустую тяжёлый v3.1-предиктор.
+        self._fstec_calc.validate(request.k, request.l, request.p, e_codes, request.h)
+
+        predictor = self._predictor_for("3.1")
+        start = time.perf_counter()
+        pred = predictor.predict(
+            description=request.description,
+            cwe_id=request.cwe_id,
+            description_ru=request.description_ru,
+            epss=request.epss,
+            kev=int(request.kev) if request.kev is not None else None,
+            exploit=int(request.exploit) if request.exploit is not None else None,
+        )
+        result = self._fstec_calc.calculate(
+            i_cvss=float(pred["score"]),
+            k=request.k,
+            l=request.l,
+            p=request.p,
+            e=e_codes,
+            h=request.h,
+        )
+        elapsed_ms = (time.perf_counter() - start) * 1000.0
+        return FSTECResponse(
+            v=result.v,
+            v_exact=result.v_exact,
+            level=result.level,
+            i_cvss=result.i_cvss,
+            i_infr=result.i_infr,
+            i_at=result.i_at,
+            i_imp=result.i_imp,
+            breakdown=FSTECBreakdown(
+                k_value=result.k_value,
+                l_value=result.l_value,
+                p_value=result.p_value,
+                e_value=result.e_value,
+                h_value=result.h_value,
+                k_term=result.k_term,
+                l_term=result.l_term,
+                p_term=result.p_term,
+            ),
+            cvss31_vector=pred["vector"],
+            cvss31_severity=pred["severity"],
+            inference_time_ms=round(elapsed_ms, 2),
+        )
+
+    @staticmethod
+    def cwe_catalog() -> list[dict[str, str]]:
+        """CWE, известные модели (из cwe_vocab.json), с именами, по возрастанию номера.
+
+        Имя показывается на русском (выгрузка БДУ ФСТЭК); если для CWE нет
+        русского названия — фолбэк на английское название MITRE, затем на сам id.
+        Если словарь модели недоступен — отдаётся весь справочник. Модель не
+        загружается: читаются только JSON-файлы.
+        """
+        names_ru = CWENameLookup(DEFAULT_CWE_NAMES_RU_PATH)
+        names_en = CWENameLookup(DEFAULT_CWE_NAMES_PATH)
+        ids: list[str] = []
+        if DEFAULT_CWE_VOCAB_PATH.exists():
+            try:
+                with DEFAULT_CWE_VOCAB_PATH.open("r", encoding="utf-8") as fh:
+                    vocab = json.load(fh)
+                ids = [k for k in vocab if isinstance(k, str) and k.startswith("CWE-")]
+            except (OSError, json.JSONDecodeError):
+                logger.warning("Не удалось прочитать %s — отдаю весь справочник CWE", DEFAULT_CWE_VOCAB_PATH)
+        if not ids:
+            # объединение известных id из обоих справочников
+            ids = list({**names_ru.all(), **names_en.all()}.keys())
+
+        def _num(cwe: str) -> int:
+            try:
+                return int(cwe.split("-", 1)[1])
+            except (IndexError, ValueError):
+                return 0
+
+        return [
+            {"id": cwe, "name": names_ru.get(cwe) or names_en.get(cwe) or cwe}
+            for cwe in sorted(set(ids), key=_num)
+        ]
+
+    @staticmethod
+    def fstec_suggest(cwe_id: str, kev: bool, exploit: bool) -> dict[str, Any]:
+        """Предлагаемые значения E (по KEV/ExploitDB) и H (по CWE) с пояснением источника.
+
+        Только предзаполнение — пользователь правит вручную (п.9 Методики). K/L/P
+        не предлагаются (контекст ИС). Модель не загружается.
+        """
+        if kev:
+            e_source = "эксплуатация в реальных атаках (E = 0.6)"
+        elif exploit:
+            e_source = "наличие эксплойта (E = 0.3)"
+        else:
+            e_source = "нет сведений об эксплуатации (E = 0.1)"
+        h_codes = suggest_h(cwe_id)
+        h_source = f"предложено по {cwe_id}" if h_codes else f"для {cwe_id} нет авто-предложения — выберите вручную"
+        return {
+            "e": {"codes": suggest_e(kev, exploit), "source": e_source},
+            "h": {"codes": h_codes, "source": h_source},
+        }
+
+    @staticmethod
+    def fstec_options() -> dict[str, Any]:
+        """Каталог показателей Таблицы 1 для построения формы на фронте."""
+        catalog: dict[str, Any] = {}
+        for name, cfg in INDICATOR_CATALOG.items():
+            options: list[Option] = cfg["options"]  # type: ignore[assignment]
+            catalog[name] = {
+                "weight": cfg["weight"],
+                "multiselect": cfg["multiselect"],
+                "options": [
+                    {"code": o.code, "label": o.label, "value": o.value} for o in options
+                ],
+            }
+        return catalog
 
     def health(self) -> HealthResponse:
         return HealthResponse(

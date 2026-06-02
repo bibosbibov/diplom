@@ -147,6 +147,65 @@ def test_predict_v31(client: TestClient) -> None:
     assert data["severity"] in {"None", "Low", "Medium", "High", "Critical"}
 
 
+def test_fstec_options_catalog(client: TestClient) -> None:
+    response = client.get("/fstec/options")
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert set(data.keys()) == {"K", "L", "P", "E", "H"}
+    assert data["P"]["multiselect"] is False
+    assert data["K"]["multiselect"] is True
+    assert data["K"]["weight"] == 0.5
+    # 12 вариантов последствий H из Таблицы 1
+    assert len(data["H"]["options"]) == 12
+    codes = {o["code"] for o in data["K"]["options"]}
+    assert "firewall" in codes and "critical_process" in codes
+
+
+@pytest.mark.skipif(
+    not _V31_AVAILABLE,
+    reason="нет stage1/scope_head — пропускаем тест режима ФСТЭК",
+)
+def test_fstec_assessment(client: TestClient) -> None:
+    payload = {
+        "description": (
+            "FortiOS privilege escalation via incorrect privilege assignment allows a "
+            "remote attacker to elevate privileges on the firewall appliance."
+        ),
+        "cwe_id": "CWE-269",
+        "k": ["firewall"],
+        "l": ["from_10_to_50"],
+        "p": "internet_accessible",
+        "h": ["privilege_escalation"],
+    }  # e не передаём — сервер выведет его из kev/exploit (здесь оба отсутствуют → 0.1)
+    response = client.post("/fstec", json=payload)
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["level"] in {"Критический", "Высокий", "Средний", "Низкий"}
+    assert 0.0 <= data["v"] <= 100.0
+    assert data["cvss31_vector"].startswith("CVSS:3.1/")
+    # Контекст из примера 1: I_infr=0.9, I_at=0.1, I_imp=0.5 (не зависят от модели)
+    assert data["i_infr"] == pytest.approx(0.9)
+    assert data["i_at"] == pytest.approx(0.1)
+    assert data["i_imp"] == pytest.approx(0.5)
+    assert data["breakdown"]["k_value"] == 0.9
+
+
+def test_fstec_unknown_code_rejected(client: TestClient) -> None:
+    response = client.post(
+        "/fstec",
+        json={
+            "description": "Some valid vulnerability description goes here for testing.",
+            "cwe_id": "CWE-79",
+            "k": ["nonexistent_component"],
+            "l": ["lt_10"],
+            "p": "internet_isolated",
+            "e": ["no_info"],
+            "h": ["cross_site_scripting"],
+        },
+    )
+    assert response.status_code == 400
+
+
 def test_predict_invalid_version_rejected(client: TestClient) -> None:
     response = client.post(
         "/predict",

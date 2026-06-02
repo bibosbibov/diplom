@@ -74,6 +74,59 @@ class PredictionResponse(BaseModel):
     )
 
 
+class FSTECRequest(BaseModel):
+    """Запрос на оценку уровня критичности по Методике ФСТЭК (30.06.2025).
+
+    Балл CVSS 3.1 не запрашивается — он предсказывается моделью v3.1 по
+    ``description`` + ``cwe_id``. Контекстные показатели K/L/E/H — мультивыбор
+    (коды из Таблицы 1), P — одиночный код.
+    """
+
+    description: str = Field(min_length=10, max_length=10000)
+    cwe_id: str = Field(pattern=r"^CWE-\d+$")
+    description_ru: str | None = Field(default=None)
+    epss: float | None = Field(default=None, ge=0.0, le=1.0)
+    kev: bool | None = Field(default=None)
+    exploit: bool | None = Field(default=None)
+    k: list[str] = Field(min_length=1, description="Тип компонента (коды, мультивыбор)")
+    l: list[str] = Field(min_length=1, description="Доля уязвимых компонентов (мультивыбор)")
+    p: str = Field(description="Влияние на периметр (один код)")
+    e: list[str] = Field(
+        default_factory=list,
+        description="Сведения об эксплуатации; если пусто — выводится из kev/exploit",
+    )
+    h: list[str] = Field(min_length=1, description="Последствия воздействий (мультивыбор)")
+
+
+class FSTECBreakdown(BaseModel):
+    """Пошаговая разбивка расчёта I_infr и итоговых значений показателей."""
+
+    k_value: float
+    l_value: float
+    p_value: float
+    e_value: float
+    h_value: float
+    k_term: float = Field(description="k·K")
+    l_term: float = Field(description="l·L")
+    p_term: float = Field(description="p·P")
+
+
+class FSTECResponse(BaseModel):
+    """Результат оценки по Методике ФСТЭК."""
+
+    v: float = Field(description="Уровень критичности V (округл. до 2 знаков)")
+    v_exact: float = Field(description="Точное (неокруглённое) V")
+    level: str = Field(description="Критический / Высокий / Средний / Низкий")
+    i_cvss: float = Field(description="Базовый балл CVSS 3.1 (из модели)")
+    i_infr: float
+    i_at: float
+    i_imp: float
+    breakdown: FSTECBreakdown
+    cvss31_vector: str = Field(description="Предсказанный вектор CVSS 3.1")
+    cvss31_severity: str = Field(description="Severity по CVSS 3.1")
+    inference_time_ms: float = Field(ge=0.0)
+
+
 class HealthResponse(BaseModel):
     """Статус готовности сервиса."""
 
@@ -96,6 +149,9 @@ __all__ = [
     "BatchPredictionRequest",
     "MetricPrediction",
     "PredictionResponse",
+    "FSTECRequest",
+    "FSTECBreakdown",
+    "FSTECResponse",
     "HealthResponse",
     "ModelInfoResponse",
 ]
