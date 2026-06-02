@@ -33,6 +33,8 @@ DEFAULT_TEST_METRICS_PATH = ROOT / "reports" / "test_evaluation.json"
 # Артефакты режима CVSS v3.1 (stage 1 backbone + отдельная Scope-голова).
 DEFAULT_STAGE1_PATH = ROOT / "models" / "dapt_mbert" / "best_stage1.pt"
 DEFAULT_SCOPE_HEAD_PATH = ROOT / "models" / "scope_head_v3.pt"
+# Словарь CWE-имён для подстановки cwe_name в текст (общий для обоих предикторов).
+DEFAULT_CWE_NAMES_PATH = ROOT / "data" / "raw" / "cwe_names.json"
 
 
 class MLService:
@@ -61,6 +63,7 @@ class MLService:
         device: str = "auto",
         stage1_path: str | Path = DEFAULT_STAGE1_PATH,
         scope_head_path: str | Path = DEFAULT_SCOPE_HEAD_PATH,
+        cwe_names_path: str | Path = DEFAULT_CWE_NAMES_PATH,
     ) -> None:
         self.status: str = "loading"
         self.model_loaded: bool = False
@@ -84,6 +87,7 @@ class MLService:
         self._device = device
         self._stage1_path = Path(stage1_path)
         self._scope_head_path = Path(scope_head_path)
+        self._cwe_names_path = Path(cwe_names_path)
 
         try:
             logger.info("Загрузка VulnerabilityPredictor из %s", model_path)
@@ -91,6 +95,7 @@ class MLService:
                 model_path=str(model_path),
                 config_path=str(config_path),
                 cwe_vocab_path=str(cwe_vocab_path),
+                cwe_names_path=str(self._cwe_names_path),
                 device=device,
             )
             self._device_str = str(self._predictor.device)
@@ -125,6 +130,7 @@ class MLService:
                     scope_head_path=str(self._scope_head_path),
                     train_config_path=str(self._config_path),
                     cwe_vocab_path=str(self._cwe_vocab_path),
+                    cwe_names_path=str(self._cwe_names_path),
                     device=self._device,
                 )
             return self._predictor_v31

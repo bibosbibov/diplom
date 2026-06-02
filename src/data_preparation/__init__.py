@@ -15,6 +15,7 @@ from .cvss_vector_parser import (
     vector_to_labels,
 )
 from .cwe_encoder import CWEEncoder
+from .cwe_names_lookup import CWENameLookup
 from .features_encoder import FeaturesEncoder
 from .text_processor import TextProcessor
 
@@ -34,6 +35,7 @@ __all__ = [
     "CVSSDataset",
     "CVSSTokenizer",
     "CWEEncoder",
+    "CWENameLookup",
     "FeaturesEncoder",
     "IGNORE_INDEX",
     "TextProcessor",

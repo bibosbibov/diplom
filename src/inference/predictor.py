@@ -20,6 +20,7 @@ import yaml
 from ..cvss_calculator import CVSSCalculator
 from ..data_preparation.cvss_vector_parser import V4_LABEL_MAPS, V4_METRIC_ORDER
 from ..data_preparation.cwe_encoder import CWEEncoder
+from ..data_preparation.cwe_names_lookup import DEFAULT_CWE_NAMES_PATH, CWENameLookup
 from ..data_preparation.features_encoder import FeaturesEncoder
 from ..data_preparation.text_processor import TextProcessor
 from ..data_preparation.tokenizer_wrapper import CVSSTokenizer
@@ -56,12 +57,14 @@ class VulnerabilityPredictor:
         device: str = "auto",
         confidence_threshold: float = 0.7,
         cwe_vocab_path: str = DEFAULT_CWE_VOCAB_PATH,
+        cwe_names_path: str = DEFAULT_CWE_NAMES_PATH,
     ) -> None:
         self.confidence_threshold = float(confidence_threshold)
         self.device = self._resolve_device(device)
 
         self._metric_classes = self._load_metric_classes(config_path)
         self._cwe_encoder = CWEEncoder.load(cwe_vocab_path)
+        self._cwe_names = CWENameLookup(cwe_names_path)
         self._features_encoder = FeaturesEncoder()
         self._text_processor = TextProcessor()
         self._tokenizer = CVSSTokenizer()
@@ -135,7 +138,9 @@ class VulnerabilityPredictor:
             6.9 Medium
         """
         d_ru, d_en = self._split_descriptions(description, description_lang, description_ru)
-        cwe_name = ""  # cwe_name по идентификатору не подгружаем — лишняя зависимость
+        # cwe_name подставляем по cwe_id (модель обучалась с ним) — офлайн-лукап,
+        # при отсутствии словаря вернётся None и текст соберётся без cwe_name.
+        cwe_name = self._cwe_names.get(cwe_id) or ""
         text = self._text_processor.prepare_text(d_ru, d_en, cwe_name)
         encoding = self._tokenizer.tokenize(text)
 
@@ -221,7 +226,7 @@ class VulnerabilityPredictor:
             exploit = item.get("exploit")
 
             d_ru, d_en = self._split_descriptions(description, description_lang, description_ru)
-            text = self._text_processor.prepare_text(d_ru, d_en, "")
+            text = self._text_processor.prepare_text(d_ru, d_en, self._cwe_names.get(cwe_id) or "")
             texts.append(text)
             cwe_idxs.append(self._cwe_encoder.transform(cwe_id))
             features_rows.append(self._features_encoder.encode(epss=epss, kev=kev, exploit=exploit))

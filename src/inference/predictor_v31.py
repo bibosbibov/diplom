@@ -32,6 +32,7 @@ import yaml
 from ..cvss_calculator import CVSS31Calculator
 from ..data_preparation.cvss_vector_parser import V3_LABEL_MAPS, V3_METRIC_ORDER
 from ..data_preparation.cwe_encoder import CWEEncoder
+from ..data_preparation.cwe_names_lookup import DEFAULT_CWE_NAMES_PATH, CWENameLookup
 from ..data_preparation.features_encoder import FeaturesEncoder
 from ..data_preparation.text_processor import TextProcessor
 from ..data_preparation.tokenizer_wrapper import CVSSTokenizer
@@ -88,12 +89,14 @@ class VulnerabilityPredictorV31:
         device: str = "auto",
         confidence_threshold: float = 0.7,
         verify_backbone: bool = True,
+        cwe_names_path: str = DEFAULT_CWE_NAMES_PATH,
     ) -> None:
         self.confidence_threshold = float(confidence_threshold)
         self.device = VulnerabilityPredictor._resolve_device(device)
 
         self._metric_classes = self._load_stage1_classes(train_config_path)
         self._cwe_encoder = CWEEncoder.load(cwe_vocab_path)
+        self._cwe_names = CWENameLookup(cwe_names_path)
         self._features_encoder = FeaturesEncoder()
         self._text_processor = TextProcessor()
         self._tokenizer = CVSSTokenizer()
@@ -162,7 +165,7 @@ class VulnerabilityPredictorV31:
         d_ru, d_en = VulnerabilityPredictor._split_descriptions(
             description, description_lang, description_ru
         )
-        text = self._text_processor.prepare_text(d_ru, d_en, "")
+        text = self._text_processor.prepare_text(d_ru, d_en, self._cwe_names.get(cwe_id) or "")
         encoding = self._tokenizer.tokenize(text)
 
         input_ids = torch.tensor(
@@ -239,7 +242,9 @@ class VulnerabilityPredictorV31:
             d_ru, d_en = VulnerabilityPredictor._split_descriptions(
                 item.get("description"), item.get("description_lang"), item.get("description_ru")
             )
-            text = self._text_processor.prepare_text(d_ru, d_en, "")
+            text = self._text_processor.prepare_text(
+                d_ru, d_en, self._cwe_names.get(item.get("cwe_id")) or ""
+            )
             texts.append(text)
             cwe_idxs.append(self._cwe_encoder.transform(item.get("cwe_id")))
             features_rows.append(
