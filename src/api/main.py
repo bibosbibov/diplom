@@ -42,12 +42,12 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="CVSS v4.0 Vulnerability Severity Assessment",
+    title="CVSS Vulnerability Severity Assessment",
     description=(
         "Автоматическая оценка критичности уязвимостей ПО на основе CVSS v4.0 "
-        "с применением трансформерной модели mBERT. Магистерская ВКР."
+        "и v3.1 с применением трансформерной модели mBERT. Магистерская ВКР."
     ),
-    version="1.0.0",
+    version="1.1.0",
     docs_url="/docs",
     lifespan=lifespan,
 )
@@ -55,16 +55,17 @@ app = FastAPI(
 
 @app.post("/predict", response_model=PredictionResponse)
 def predict(request: PredictionRequest) -> PredictionResponse:
-    """Предсказывает CVSS v4.0-вектор для одной уязвимости.
+    """Предсказывает CVSS-вектор для одной уязвимости (версия — поле ``cvss_version``).
 
     Args:
-        request: Тело запроса с описанием, CWE и опциональными признаками
-            (EPSS, KEV, ExploitDB). Валидируется Pydantic-схемой
-            :class:`PredictionRequest`.
+        request: Тело запроса с описанием, CWE, версией CVSS (``4.0`` по
+            умолчанию или ``3.1``) и опциональными признаками (EPSS, KEV,
+            ExploitDB). Валидируется Pydantic-схемой :class:`PredictionRequest`.
 
     Returns:
-        :class:`PredictionResponse` с CVSS-вектором, баллом 0–10,
-        уровнем severity, 12 метриками с уверенностью и временем инференса.
+        :class:`PredictionResponse` с CVSS-вектором, баллом 0–10, уровнем
+        severity, метриками с уверенностью (12 для v4.0, 8 для v3.1) и
+        временем инференса.
 
     Raises:
         HTTPException 422: невалидные входные данные (короткое описание,

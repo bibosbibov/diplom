@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>CVSS v4.0 — Автоматическая оценка критичности уязвимостей</title>
+  <title>CVSS — Автоматическая оценка критичности уязвимостей</title>
   <style>
     :root {
       --primary: #1e3a8a;
@@ -142,6 +142,27 @@
       cursor: pointer;
     }
     button.secondary:hover { background: #f3f4f6; }
+    .version-toggle {
+      display: inline-flex;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+      margin-bottom: 4px;
+    }
+    .version-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+    .version-toggle label {
+      margin: 0;
+      padding: 8px 18px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--muted);
+      background: #fff;
+      transition: background 0.15s, color 0.15s;
+    }
+    .version-toggle label + label { border-left: 1px solid var(--border); }
+    .version-toggle input:checked + label { background: var(--accent); color: #fff; }
+    .version-hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
     .loader {
       display: none;
       text-align: center;
@@ -281,13 +302,24 @@
 </head>
 <body>
   <header>
-    <h1>Автоматическая оценка критичности уязвимостей по CVSS v4.0</h1>
+    <h1>Автоматическая оценка критичности уязвимостей по CVSS</h1>
   </header>
 
   <main>
     <section class="card">
       <h2>Параметры уязвимости</h2>
       <form id="predict-form">
+        <div class="form-group">
+          <label>Версия CVSS</label>
+          <div class="version-toggle" role="radiogroup" aria-label="Версия CVSS">
+            <input type="radio" name="cvss_version" id="ver-4" value="4.0" checked />
+            <label for="ver-4">CVSS v4.0</label>
+            <input type="radio" name="cvss_version" id="ver-31" value="3.1" />
+            <label for="ver-31">CVSS v3.1</label>
+          </div>
+          <div class="version-hint" id="version-hint">12 метрик, итоговый балл по спецификации FIRST v4.0.</div>
+        </div>
+
         <div class="form-group">
           <label for="description">Описание уязвимости</label>
           <textarea
@@ -423,8 +455,25 @@
       SI: "Subsequent System Integrity",
       SA: "Subsequent System Availability",
       E:  "Exploit Maturity",
+      // CVSS v3.1
+      S:  "Scope",
+      C:  "Confidentiality Impact",
+      I:  "Integrity Impact",
+      A:  "Availability Impact",
     };
-    const METRIC_ORDER = ["AV","AC","AT","PR","UI","VC","VI","VA","SC","SI","SA","E"];
+    const METRIC_ORDER_BY_VERSION = {
+      "4.0": ["AV","AC","AT","PR","UI","VC","VI","VA","SC","SI","SA","E"],
+      "3.1": ["AV","AC","PR","UI","S","C","I","A"],
+    };
+    const VERSION_HINTS = {
+      "4.0": "12 метрик, итоговый балл по спецификации FIRST v4.0.",
+      "3.1": "8 базовых метрик (Scope предсказывается отдельной головой), балл по спецификации FIRST v3.1.",
+    };
+
+    function selectedVersion() {
+      const checked = document.querySelector('input[name="cvss_version"]:checked');
+      return checked ? checked.value : "4.0";
+    }
 
     const $ = (sel) => document.querySelector(sel);
     const form = $("#predict-form");
@@ -443,6 +492,12 @@
       epssEnabled = false;
       epssInput.value = 0;
       epssVal.textContent = "—";
+    });
+
+    document.querySelectorAll('input[name="cvss_version"]').forEach((radio) => {
+      radio.addEventListener("change", () => {
+        $("#version-hint").textContent = VERSION_HINTS[selectedVersion()] || "";
+      });
     });
 
     function showToast(message) {
@@ -467,7 +522,8 @@
 
       const tbody = $("#metrics-tbody");
       tbody.innerHTML = "";
-      for (const key of METRIC_ORDER) {
+      const order = METRIC_ORDER_BY_VERSION[data.cvss_version] || METRIC_ORDER_BY_VERSION["4.0"];
+      for (const key of order) {
         const m = data.metrics[key];
         if (!m) continue;
         const tr = document.createElement("tr");
@@ -497,6 +553,7 @@
       const payload = {
         description,
         cwe_id,
+        cvss_version: selectedVersion(),
         kev: kev ? true : null,
         exploit: exploit ? true : null,
         epss: epssEnabled ? Number(epssInput.value) : null,

@@ -19,6 +19,11 @@ class PredictionRequest(BaseModel):
         pattern=r"^CWE-\d+$",
         description="Идентификатор CWE, например CWE-89",
     )
+    cvss_version: str = Field(
+        default="4.0",
+        pattern=r"^(4\.0|3\.1)$",
+        description="Версия CVSS для оценки: '4.0' (по умолчанию) или '3.1'",
+    )
     description_ru: str | None = Field(
         default=None,
         description="Отдельное русскоязычное описание (если основное — англ.)",
@@ -55,11 +60,12 @@ class MetricPrediction(BaseModel):
 class PredictionResponse(BaseModel):
     """Полный результат предсказания: вектор, балл и метрики."""
 
+    cvss_version: str = Field(description="Версия CVSS результата: '4.0' или '3.1'")
     vector: str = Field(description="CVSS-вектор, например 'CVSS:4.0/AV:N/...'")
-    score: float = Field(ge=0.0, le=10.0, description="Итоговый балл CVSS v4.0")
+    score: float = Field(ge=0.0, le=10.0, description="Итоговый базовый балл CVSS")
     severity: str = Field(description="Critical / High / Medium / Low / None")
     metrics: dict[str, MetricPrediction] = Field(
-        description="12 предсказанных метрик с уверенностью"
+        description="Предсказанные метрики с уверенностью (12 для v4.0, 8 для v3.1)"
     )
     low_confidence_metrics: list[str] = Field(description="Метрики с confidence ниже порога")
     inference_time_ms: float = Field(

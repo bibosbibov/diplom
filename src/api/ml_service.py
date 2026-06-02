@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ..inference import VulnerabilityPredictor
+from ..inference import VulnerabilityPredictor, VulnerabilityPredictorV31
 from .schemas import (
     HealthResponse,
     MetricPrediction,
@@ -30,6 +30,9 @@ DEFAULT_MODEL_PATH = ROOT / "models" / "final_model.pt"
 DEFAULT_CONFIG_PATH = ROOT / "configs" / "train.yaml"
 DEFAULT_CWE_VOCAB_PATH = ROOT / "data" / "processed" / "cwe_vocab.json"
 DEFAULT_TEST_METRICS_PATH = ROOT / "reports" / "test_evaluation.json"
+# Артефакты режима CVSS v3.1 (stage 1 backbone + отдельная Scope-голова).
+DEFAULT_STAGE1_PATH = ROOT / "models" / "dapt_mbert" / "best_stage1.pt"
+DEFAULT_SCOPE_HEAD_PATH = ROOT / "models" / "scope_head_v3.pt"
 
 
 class MLService:
@@ -56,10 +59,15 @@ class MLService:
         cwe_vocab_path: str | Path = DEFAULT_CWE_VOCAB_PATH,
         test_metrics_path: str | Path = DEFAULT_TEST_METRICS_PATH,
         device: str = "auto",
+        stage1_path: str | Path = DEFAULT_STAGE1_PATH,
+        scope_head_path: str | Path = DEFAULT_SCOPE_HEAD_PATH,
     ) -> None:
         self.status: str = "loading"
         self.model_loaded: bool = False
         self._predictor: VulnerabilityPredictor | None = None
+        # v3.1-предиктор грузится лениво при первом запросе с cvss_version="3.1"
+        # (ещё ~700 МБ stage 1 backbone + Scope-голова — не держим зря).
+        self._predictor_v31: VulnerabilityPredictorV31 | None = None
         self._test_metrics: dict[str, Any] = {}
         self._training_completed: str = "unknown"
         self._num_parameters: int = 0
@@ -70,6 +78,12 @@ class MLService:
         config_path = Path(config_path)
         cwe_vocab_path = Path(cwe_vocab_path)
         test_metrics_path = Path(test_metrics_path)
+        # Сохраняем для ленивой инициализации v3.1-предиктора.
+        self._config_path = config_path
+        self._cwe_vocab_path = cwe_vocab_path
+        self._device = device
+        self._stage1_path = Path(stage1_path)
+        self._scope_head_path = Path(scope_head_path)
 
         try:
             logger.info("Загрузка VulnerabilityPredictor из %s", model_path)
@@ -101,11 +115,27 @@ class MLService:
             raise RuntimeError("Модель не загружена")
         return self._predictor
 
-    def predict(self, request: PredictionRequest) -> PredictionResponse:
-        """Тонкая обёртка над :meth:`VulnerabilityPredictor.predict`."""
+    def _predictor_for(self, cvss_version: str) -> VulnerabilityPredictor | VulnerabilityPredictorV31:
+        """Возвращает предиктор под версию CVSS; v3.1 грузит лениво."""
+        if cvss_version == "3.1":
+            if self._predictor_v31 is None:
+                logger.info("Ленивая загрузка v3.1-предиктора (stage1=%s)", self._stage1_path)
+                self._predictor_v31 = VulnerabilityPredictorV31(
+                    stage1_path=str(self._stage1_path),
+                    scope_head_path=str(self._scope_head_path),
+                    train_config_path=str(self._config_path),
+                    cwe_vocab_path=str(self._cwe_vocab_path),
+                    device=self._device,
+                )
+            return self._predictor_v31
+        return self.predictor
 
+    def predict(self, request: PredictionRequest) -> PredictionResponse:
+        """Предсказание одной уязвимости в выбранной версии CVSS (4.0 / 3.1)."""
+
+        predictor = self._predictor_for(request.cvss_version)
         start = time.perf_counter()
-        result = self.predictor.predict(
+        result = predictor.predict(
             description=request.description,
             cwe_id=request.cwe_id,
             description_ru=request.description_ru,
@@ -114,27 +144,53 @@ class MLService:
             exploit=int(request.exploit) if request.exploit is not None else None,
         )
         elapsed_ms = (time.perf_counter() - start) * 1000.0
-        return self._to_response(result, elapsed_ms)
+        return self._to_response(result, elapsed_ms, request.cvss_version)
 
     def predict_batch(self, requests: list[PredictionRequest]) -> list[PredictionResponse]:
-        """Пакетное предсказание для списка запросов."""
+        """Пакетное предсказание. Запросы могут смешивать версии CVSS: v4.0
+        идут одним батчем (быстрее), v3.1 — поэлементно (у v3.1-предиктора нет
+        batch-метода). Порядок результатов сохраняется."""
 
-        items = [
-            {
-                "description": r.description,
-                "cwe_id": r.cwe_id,
-                "description_ru": r.description_ru,
-                "epss": r.epss,
-                "kev": int(r.kev) if r.kev is not None else None,
-                "exploit": int(r.exploit) if r.exploit is not None else None,
-            }
-            for r in requests
-        ]
         start = time.perf_counter()
-        results = self.predictor.predict_batch(items)
+        responses: list[PredictionResponse | None] = [None] * len(requests)
+
+        v4_items: list[dict[str, Any]] = []
+        v4_positions: list[int] = []
+        for i, r in enumerate(requests):
+            if r.cvss_version == "3.1":
+                result = self._predictor_for("3.1").predict(
+                    description=r.description,
+                    cwe_id=r.cwe_id,
+                    description_ru=r.description_ru,
+                    epss=r.epss,
+                    kev=int(r.kev) if r.kev is not None else None,
+                    exploit=int(r.exploit) if r.exploit is not None else None,
+                )
+                responses[i] = self._to_response(result, 0.0, "3.1")
+            else:
+                v4_positions.append(i)
+                v4_items.append(
+                    {
+                        "description": r.description,
+                        "cwe_id": r.cwe_id,
+                        "description_ru": r.description_ru,
+                        "epss": r.epss,
+                        "kev": int(r.kev) if r.kev is not None else None,
+                        "exploit": int(r.exploit) if r.exploit is not None else None,
+                    }
+                )
+
+        if v4_items:
+            v4_results = self.predictor.predict_batch(v4_items)
+            for pos, result in zip(v4_positions, v4_results):
+                responses[pos] = self._to_response(result, 0.0, "4.0")
+
         total_ms = (time.perf_counter() - start) * 1000.0
-        per_item_ms = total_ms / max(len(results), 1)
-        return [self._to_response(r, per_item_ms) for r in results]
+        per_item_ms = round(total_ms / max(len(requests), 1), 2)
+        for resp in responses:
+            if resp is not None:
+                resp.inference_time_ms = per_item_ms
+        return [resp for resp in responses if resp is not None]
 
     def health(self) -> HealthResponse:
         return HealthResponse(
@@ -154,7 +210,11 @@ class MLService:
     # ------------------------------------------------------------- helpers
 
     @staticmethod
-    def _to_response(result: dict[str, Any], inference_time_ms: float) -> PredictionResponse:
+    def _to_response(
+        result: dict[str, Any],
+        inference_time_ms: float,
+        cvss_version: str,
+    ) -> PredictionResponse:
         metrics = {
             name: MetricPrediction(
                 value=result["metrics"][name],
@@ -163,6 +223,7 @@ class MLService:
             for name in result["metrics"]
         }
         return PredictionResponse(
+            cvss_version=cvss_version,
             vector=result["vector"],
             score=float(result["score"]),
             severity=result["severity"],
