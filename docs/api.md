@@ -1,7 +1,8 @@
 # REST API
 
-FastAPI веб-сервис предоставляет четыре endpoint-а и встроенный
-интерактивный Swagger UI.
+FastAPI веб-сервис предоставляет эндпоинты предсказания CVSS (v4.0 и v3.1),
+оценки по Методике ФСТЭК и служебные, а также встроенный интерактивный
+Swagger UI.
 
 ## Базовый адрес
 
@@ -19,10 +20,14 @@ FastAPI веб-сервис предоставляет четыре endpoint-а 
 
 1. [POST /predict](#post-predict)
 2. [POST /predict/batch](#post-predictbatch)
-3. [GET /health](#get-health)
-4. [GET /model/info](#get-modelinfo)
-5. [Ошибки и их обработка](#ошибки-и-их-обработка)
-6. [Ограничения](#ограничения)
+3. [POST /fstec](#post-fstec)
+4. [GET /fstec/options](#get-fstecoptions)
+5. [GET /fstec/suggest](#get-fstecsuggest)
+6. [GET /cwe](#get-cwe)
+7. [GET /health](#get-health)
+8. [GET /model/info](#get-modelinfo)
+9. [Ошибки и их обработка](#ошибки-и-их-обработка)
+10. [Ограничения](#ограничения)
 
 ---
 
@@ -38,6 +43,7 @@ FastAPI веб-сервис предоставляет четыре endpoint-а 
 |:--|:--|:--|:--|
 | `description` | string | Да | min_length=10, max_length=10000 |
 | `cwe_id` | string | Да | regex `^CWE-\d+$` (например, `CWE-89`) |
+| `cvss_version` | string | Нет | `4.0` (по умолчанию) или `3.1`. Определяет версию вектора и набор метрик (12 для v4.0, 8 для v3.1) |
 | `description_ru` | string \| null | Нет | Отдельное русскоязычное описание, если `description` английский |
 | `epss` | float \| null | Нет | 0,0 ≤ epss ≤ 1,0 |
 | `kev` | bool \| null | Нет | присутствие в CISA KEV |
@@ -63,6 +69,7 @@ curl -X POST http://localhost:8000/predict \
 
 ```json
 {
+  "cvss_version": "4.0",
   "vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:L/VI:N/VA:L/SC:N/SI:N/SA:N/E:A",
   "score": 6.9,
   "severity": "Medium",
@@ -98,10 +105,11 @@ curl -X POST http://localhost:8000/predict \
 
 | Поле | Описание |
 |:--|:--|
-| `vector` | Каноническая CVSS-строка `CVSS:4.0/AV:N/.../E:A` |
+| `cvss_version` | Версия результата: `4.0` или `3.1` (эхо запроса) |
+| `vector` | Каноническая CVSS-строка `CVSS:4.0/AV:N/.../E:A` (или `CVSS:3.1/...`) |
 | `score` | Итоговый балл 0,0–10,0 (рассчитан собственным калькулятором) |
 | `severity` | None / Low / Medium / High / Critical |
-| `metrics` | Словарь из 12 метрик с `value` и `confidence` |
+| `metrics` | Словарь метрик с `value` и `confidence` (12 для v4.0, 8 для v3.1) |
 | `low_confidence_metrics` | Метрики с confidence < 0,7 — требуют ручной проверки |
 | `inference_time_ms` | Время предсказания в миллисекундах |
 
@@ -157,6 +165,152 @@ curl -X POST http://localhost:8000/predict/batch \
 
 ---
 
+## POST /fstec
+
+Рассчитывает уровень критичности уязвимости в **конкретной** информационной
+системе по Методике ФСТЭК России (Методический документ от 30.06.2025):
+
+```
+V = I_cvss × I_infr × (I_at + I_imp)
+```
+
+Базовый балл `I_cvss` берётся из предсказания модели CVSS v3.1 по `description`
++ `cwe_id` (у пользователя не запрашивается). Контекстные показатели задаёт
+пользователь кодами из Таблицы 1 Методики (получить каталог — `GET /fstec/options`).
+
+### Request
+
+| Поле | Тип | Обязательно | Описание |
+|:--|:--|:--|:--|
+| `description` | string | Да | Описание уязвимости (min 10, max 10000) |
+| `cwe_id` | string | Да | regex `^CWE-\d+$` |
+| `k` | string[] | Да | Тип компонента ИС — мультивыбор (≥1 код), берётся max |
+| `l` | string[] | Да | Доля уязвимых компонентов — мультивыбор (≥1), max |
+| `p` | string | Да | Влияние на периметр — один код |
+| `h` | string[] | Да | Последствия воздействий — мультивыбор (≥1), max |
+| `e` | string[] | Нет | Сведения об эксплуатации; если пусто — выводится из `kev`/`exploit` |
+| `description_ru`, `epss`, `kev`, `exploit` | — | Нет | Как в `/predict` |
+
+### Пример request
+
+```bash
+curl -X POST http://localhost:8000/fstec \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "SQL injection in login form allows authentication bypass",
+    "cwe_id": "CWE-89",
+    "k": ["server"],
+    "l": ["from_10_to_50"],
+    "p": "internet_accessible",
+    "e": ["exploit_available"],
+    "h": ["code_injection"]
+  }'
+```
+
+### Response
+
+`200 OK`:
+
+```json
+{
+  "v": 3.84,
+  "v_exact": 3.84,
+  "level": "Средний",
+  "i_cvss": 7.5,
+  "i_infr": 0.8,
+  "i_at": 0.3,
+  "i_imp": 0.34,
+  "breakdown": {
+    "k_value": 0.7, "l_value": 0.6, "p_value": 1.1,
+    "e_value": 0.3, "h_value": 0.34,
+    "k_term": 0.35, "l_term": 0.12, "p_term": 0.33
+  },
+  "cvss31_vector": "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:N/A:N",
+  "cvss31_severity": "High",
+  "inference_time_ms": 215.4
+}
+```
+
+Здесь `i_infr = 0.5·0.7 + 0.2·0.6 + 0.3·1.1 = 0.80`,
+`V = 7.5 · 0.80 · (0.3 + 0.34) = 3.84` → уровень «Средний».
+
+Уровни (Таблица 2 Методики): `V > 8.0` → Критический; `5.0 ≤ V ≤ 8.0` →
+Высокий; `2.0 ≤ V < 5.0` → Средний; `V < 2.0` → Низкий.
+
+### Status codes
+
+| Код | Когда |
+|:--|:--|
+| `200 OK` | Успешный расчёт |
+| `400 Bad Request` | Неизвестный код показателя или пустой обязательный мультивыбор |
+| `422 Unprocessable Entity` | Невалидное тело (короткое описание, кривой CWE) |
+| `500 Internal Server Error` | Внутренняя ошибка инференса |
+
+---
+
+## GET /fstec/options
+
+Каталог показателей Таблицы 1 Методики ФСТЭК — для построения формы UI.
+Модель не загружается (каталог статичен).
+
+```bash
+curl http://localhost:8000/fstec/options
+```
+
+```json
+{
+  "K": {"weight": 0.5, "multiselect": true,  "options": [{"code": "server", "label": "Серверы (центральные вычислительные узлы)", "value": 0.7}, ...]},
+  "L": {"weight": 0.2, "multiselect": true,  "options": [...]},
+  "P": {"weight": 0.3, "multiselect": false, "options": [...]},
+  "E": {"weight": 1.0, "multiselect": true,  "options": [...]},
+  "H": {"weight": 1.0, "multiselect": true,  "options": [...]}
+}
+```
+
+---
+
+## GET /fstec/suggest
+
+Предзаполнение показателей `E` и `H` (пользователь правит вручную — итоговое
+решение за специалистом, п.9 Методики). `E` — по флагам `kev`/`exploit`
+(CISA KEV / ExploitDB), `H` — по типу CWE. Модель не загружается.
+
+```bash
+curl "http://localhost:8000/fstec/suggest?cwe_id=CWE-89&kev=false&exploit=true"
+```
+
+```json
+{
+  "e": {"codes": ["exploit_available"], "source": "exploit"},
+  "h": {"codes": ["code_injection"],    "source": "cwe"}
+}
+```
+
+---
+
+## GET /cwe
+
+Список CWE (id + имя) для выпадающего списка UI: те CWE, что известны модели
+(из `cwe_vocab.json`), с человекочитаемыми именами MITRE, отсортированные по
+номеру. Модель не загружается.
+
+```bash
+curl http://localhost:8000/cwe
+```
+
+```json
+[
+  {"id": "CWE-20", "name": "Некорректная проверка вводимых данных"},
+  {"id": "CWE-79", "name": "Межсайтовое выполнение сценариев"},
+  {"id": "CWE-89", "name": "Внедрение SQL-кода"}
+]
+```
+
+Имя отдаётся на русском (выгрузка БДУ ФСТЭК), с фолбэком на английское название
+MITRE, затем на сам идентификатор.
+
+---
+
 ## GET /health
 
 Проверка готовности сервиса. Используется для liveness/readiness-проб.
@@ -205,24 +359,24 @@ curl http://localhost:8000/model/info
 
 ```json
 {
-  "model_name": "mBERT (bert-base-multilingual-cased) + 12 heads",
-  "training_completed": "2026-05-11",
+  "model_name": "mBERT (bert-base-multilingual-cased) + DAPT + 12 heads",
+  "training_completed": "2026-06-01",
   "num_parameters": 178358563,
   "test_metrics": {
     "aggregated": {
-      "macro_f1": 0.7090,
-      "vector_accuracy": 0.3992,
-      "metrics_correct_avg": 9.39,
-      "score_mae": 1.17,
-      "score_rmse": 1.98,
-      "severity_accuracy": 0.6739,
-      "severity_within_one": 0.9208,
+      "macro_f1": 0.7641,
+      "vector_accuracy": 0.4763,
+      "metrics_correct_avg": 9.63,
+      "score_mae": 1.01,
+      "score_rmse": 1.86,
+      "severity_accuracy": 0.7130,
+      "severity_within_one": 0.9486,
       "samples_evaluated": 972
     },
     "per_metric_f1": {
-      "AV": 0.5175, "AC": 0.7482, "AT": 0.7433, "PR": 0.6308,
-      "UI": 0.6414, "VC": 0.7886, "VI": 0.8198, "VA": 0.7946,
-      "SC": 0.6228, "SI": 0.6705, "SA": 0.656,  "E":  0.8751
+      "AV": 0.7626, "AC": 0.7842, "AT": 0.7651, "PR": 0.7314,
+      "UI": 0.7131, "VC": 0.8244, "VI": 0.8471, "VA": 0.8351,
+      "SC": 0.6458, "SI": 0.6928, "SA": 0.6650, "E":  0.9022
     }
   }
 }

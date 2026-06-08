@@ -111,7 +111,7 @@ data/processed/
 ├── train.parquet   # 122 913 строк (4 715 с CVSS v4.0)
 ├── val.parquet     #  26 385 строк
 ├── test.parquet    #  26 348 строк
-└── cwe_vocab.json  # ~350 уникальных CWE
+└── cwe_vocab.json  # 683 записи (681 CWE + <PAD>/<UNK>)
 ```
 
 > **Critical:** разбиение по CVE-id выполняется **ДО** разделения на наборы
@@ -198,14 +198,22 @@ seed: 42
 
 ## Ожидаемые показатели
 
-После двух этапов на test set (972 v4.0-записи) вы должны получить:
+После двух этапов на test set (972 v4.0-записи) вы должны получить
+(финальная модель — с DAPT, см. ниже):
 
 | Показатель | Целевой диапазон |
 |:--|:--|
-| Macro-F1 (12 метрик) | **0,70 – 0,72** |
-| Среднее число правильных метрик | 9,3 – 9,5 / 11 |
-| MAE по CVSS-баллу | 1,1 – 1,3 |
-| Severity Within ±1 | 0,90 – 0,93 |
+| Macro-F1 (12 метрик) | **0,74 – 0,77** |
+| Среднее число правильных метрик | 9,5 – 9,7 / 11 |
+| MAE по CVSS-баллу | 1,0 – 1,1 |
+| Severity Within ±1 | 0,94 – 0,95 |
+
+> **DAPT (domain-adaptive pretraining).** Перед двухэтапным fine-tuning'ом
+> проводится 2 эпохи MLM-предобучения `bert-base-multilingual-cased` на корпусе
+> из 122 913 описаний уязвимостей (`mlm_probability=0.15`, lr 5e-5); чекпоинт —
+> `models/dapt_mbert/`. Это даёт +0,021 Macro-F1 на v4-тесте. Без DAPT (ванильный
+> backbone) ожидаемый Macro-F1 ≈ 0,74. Подробнее —
+> [reports/dapt_experiment/chapter3_summary.md](../reports/dapt_experiment/chapter3_summary.md).
 
 Если ваши значения сильно ниже:
 
@@ -215,7 +223,7 @@ seed: 42
   Stage 2 (флаг `reinit_heads` в конфиге);
 * проверьте, что split по CVE-id не позволил утечке (см. предыдущий раздел).
 
-Полный разбор экспериментальных результатов — [reports/CHAPTER3_DRAFT.md](../reports/CHAPTER3_DRAFT.md).
+Полный разбор экспериментальных результатов — [reports/report_draft.md](../reports/report_draft.md) (гл. 7) и [reports/dapt_experiment/chapter3_summary.md](../reports/dapt_experiment/chapter3_summary.md).
 
 ---
 
@@ -302,5 +310,5 @@ python -m src.inference.cli predict ... --cwe-vocab /path/to/cwe_vocab.json
 См. также:
 
 - [docs/architecture.md](architecture.md) — устройство модели;
-- [CLAUDE.md](../CLAUDE.md) — паспорт проекта со всеми требованиями ВКР;
+- [PROJECT.md](../PROJECT.md) — паспорт проекта со всеми требованиями ВКР;
 - [reports/CHAPTER3_DRAFT.md](../reports/CHAPTER3_DRAFT.md) — анализ результатов экспериментов.
