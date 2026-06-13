@@ -25,52 +25,53 @@
       background: var(--bg);
       color: var(--text);
       line-height: 1.5;
+      font-size: 18px;
     }
     header {
       background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
       color: white;
-      padding: 32px 24px;
+      padding: 40px 40px;
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
     header h1 {
       margin: 0 0 6px 0;
-      font-size: 24px;
+      font-size: 34px;
       font-weight: 600;
     }
     header .subtitle {
       margin: 0;
       opacity: 0.85;
-      font-size: 14px;
+      font-size: 16px;
     }
     main {
-      max-width: 960px;
-      margin: 24px auto;
-      padding: 0 16px 48px 16px;
+      max-width: 1320px;
+      margin: 32px auto;
+      padding: 0 32px 64px 32px;
     }
     .card {
       background: var(--card);
       border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 24px;
-      margin-bottom: 20px;
+      border-radius: 12px;
+      padding: 36px 40px;
+      margin-bottom: 28px;
       box-shadow: 0 1px 3px rgba(0,0,0,0.04);
     }
     .card h2 {
-      margin: 0 0 16px 0;
-      font-size: 18px;
+      margin: 0 0 20px 0;
+      font-size: 26px;
       color: var(--primary-dark);
     }
     label {
       display: block;
-      margin-bottom: 6px;
-      font-size: 13px;
+      margin-bottom: 8px;
+      font-size: 16px;
       font-weight: 600;
       color: var(--text);
     }
     textarea, select, input[type="text"], input[type="number"] {
       width: 100%;
-      padding: 10px 12px;
-      font-size: 14px;
+      padding: 13px 16px;
+      font-size: 18px;
       font-family: inherit;
       border: 1px solid var(--border);
       border-radius: 6px;
@@ -82,14 +83,14 @@
       border-color: var(--accent);
       box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
     }
-    textarea { resize: vertical; min-height: 110px; }
+    textarea { resize: vertical; min-height: 150px; }
     .form-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 16px;
-      margin-top: 16px;
+      gap: 24px;
+      margin-top: 20px;
     }
-    .form-group { margin-bottom: 16px; }
+    .form-group { margin-bottom: 20px; }
     .extras {
       display: grid;
       grid-template-columns: 2fr 1fr 1fr;
@@ -117,14 +118,14 @@
       min-width: 42px;
       text-align: right;
       color: var(--muted);
-      font-size: 13px;
+      font-size: 15px;
     }
     button.primary {
       background: var(--accent);
       color: white;
       border: none;
-      padding: 12px 24px;
-      font-size: 15px;
+      padding: 16px 36px;
+      font-size: 20px;
       font-weight: 600;
       border-radius: 6px;
       cursor: pointer;
@@ -137,7 +138,7 @@
       color: var(--primary);
       border: 1px solid var(--border);
       padding: 6px 10px;
-      font-size: 12px;
+      font-size: 14px;
       border-radius: 4px;
       cursor: pointer;
     }
@@ -153,7 +154,7 @@
     .version-toggle label {
       margin: 0;
       padding: 8px 18px;
-      font-size: 14px;
+      font-size: 16px;
       font-weight: 600;
       cursor: pointer;
       color: var(--muted);
@@ -169,18 +170,18 @@
       border-radius: 8px;
       background: #fafbfc;
     }
-    .fstec-note { font-size: 13px; color: var(--muted); margin-bottom: 14px; }
-    .fstec-suggest { color: var(--accent); font-weight: 400; font-size: 12px; }
+    .fstec-note { font-size: 15px; color: var(--muted); margin-bottom: 14px; }
+    .fstec-suggest { color: var(--accent); font-weight: 400; font-size: 14px; }
     #flags-group { display: flex; gap: 24px; flex-wrap: wrap; }
     label.checkbox {
       display: flex; align-items: center; gap: 8px;
       font-weight: 500; cursor: pointer; padding: 6px 0; margin: 0;
     }
     label.checkbox input[type="checkbox"] { width: 18px; height: 18px; }
-    .fstec-loading { color: var(--muted); font-size: 13px; }
+    .fstec-loading { color: var(--muted); font-size: 15px; }
     .fstec-field { margin-bottom: 14px; }
     .fstec-field > .fstec-field-title {
-      font-size: 13px; font-weight: 600; margin-bottom: 6px; display: block;
+      font-size: 15px; font-weight: 600; margin-bottom: 6px; display: block;
     }
     .fstec-field-title .wkey { color: var(--accent); }
     .fstec-options {
@@ -190,7 +191,7 @@
     }
     .fstec-options label {
       display: flex; align-items: flex-start; gap: 10px;
-      font-weight: 500; font-size: 13px; cursor: pointer; margin: 0;
+      font-weight: 500; font-size: 15px; cursor: pointer; margin: 0;
       padding: 8px 10px; border-radius: 6px; border: 1px solid transparent;
     }
     .fstec-options label:hover { background: #f3f4f6; }
@@ -199,7 +200,7 @@
     .fstec-options .val { color: var(--muted); font-weight: 400; font-variant-numeric: tabular-nums; }
     .calc-steps {
       background: #f3f4f6; border: 1px solid var(--border); border-radius: 6px;
-      padding: 12px 14px; margin-bottom: 18px; font-size: 14px;
+      padding: 12px 14px; margin-bottom: 18px; font-size: 16px;
       font-family: "Consolas","Menlo",monospace; line-height: 1.7;
     }
     .calc-steps .muted { color: var(--muted); }
@@ -222,7 +223,7 @@
     #result { display: none; }
     #result.visible { display: block; }
     .severity-badge {
-      padding: 18px 24px;
+      padding: 24px 32px;
       border-radius: 10px;
       color: white;
       display: flex;
@@ -231,18 +232,18 @@
       margin-bottom: 18px;
     }
     .severity-badge .label {
-      font-size: 14px;
+      font-size: 16px;
       opacity: 0.85;
       text-transform: uppercase;
       letter-spacing: 0.05em;
     }
     .severity-badge .severity {
-      font-size: 28px;
+      font-size: 34px;
       font-weight: 700;
       margin-top: 4px;
     }
     .severity-badge .score {
-      font-size: 48px;
+      font-size: 58px;
       font-weight: 700;
       font-variant-numeric: tabular-nums;
     }
@@ -255,7 +256,7 @@
       background: #f3f4f6;
       border: 1px solid var(--border);
       border-radius: 6px;
-      padding: 12px 14px;
+      padding: 16px 18px;
       margin-bottom: 18px;
       display: flex;
       align-items: center;
@@ -264,17 +265,17 @@
     }
     .vector-block code {
       font-family: "Consolas", "Menlo", "Courier New", monospace;
-      font-size: 13px;
+      font-size: 16px;
       color: var(--primary-dark);
       word-break: break-all;
     }
     table.metrics {
       width: 100%;
       border-collapse: collapse;
-      font-size: 14px;
+      font-size: 16px;
     }
     table.metrics th, table.metrics td {
-      padding: 8px 10px;
+      padding: 12px 14px;
       text-align: left;
       border-bottom: 1px solid var(--border);
     }
@@ -282,7 +283,7 @@
       background: #f9fafb;
       font-weight: 600;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 14px;
       text-transform: uppercase;
       letter-spacing: 0.04em;
     }
@@ -290,7 +291,7 @@
       display: inline-block;
       padding: 2px 8px;
       border-radius: 10px;
-      font-size: 12px;
+      font-size: 14px;
       font-weight: 600;
       font-variant-numeric: tabular-nums;
     }
@@ -301,7 +302,7 @@
       display: flex;
       justify-content: space-between;
       color: var(--muted);
-      font-size: 13px;
+      font-size: 15px;
       margin-top: 16px;
     }
     .toast {
@@ -327,16 +328,16 @@
     footer {
       text-align: center;
       color: var(--muted);
-      font-size: 13px;
+      font-size: 15px;
       padding: 24px 16px 32px 16px;
     }
     footer a { color: var(--accent); text-decoration: none; }
     footer a:hover { text-decoration: underline; }
     @media (max-width: 640px) {
       .form-row, .extras { grid-template-columns: 1fr; }
-      header h1 { font-size: 20px; }
+      header h1 { font-size: 24px; }
       .severity-badge { flex-direction: column; align-items: flex-start; gap: 8px; }
-      .severity-badge .score { font-size: 36px; }
+      .severity-badge .score { font-size: 44px; }
     }
   </style>
 </head>
@@ -497,6 +498,12 @@
     const FSTEC_LEVEL_SEV = {
       "Критический": "Critical", "Высокий": "High", "Средний": "Medium", "Низкий": "Low",
     };
+    // Англоязычный severity (CVSS) → русское название для отображения.
+    const SEV_RU = {
+      "Critical": "Критический", "High": "Высокий", "Medium": "Средний",
+      "Low": "Низкий", "None": "Отсутствует",
+    };
+    const sevRu = (s) => SEV_RU[s] || s;
     const FSTEC_TITLES = {
       K: "тип компонента, подверженного уязвимости",
       L: "доля уязвимых компонентов",
@@ -650,7 +657,7 @@
       $("#vector-block").style.display = "";
       const badge = $("#severity-badge");
       badge.className = "severity-badge sev-" + data.severity;
-      $("#severity-text").textContent = data.severity;
+      $("#severity-text").textContent = sevRu(data.severity);
       $("#score-text").textContent = data.score.toFixed(1);
       $("#vector-text").textContent = data.vector;
 
@@ -663,7 +670,7 @@
         const tr = document.createElement("tr");
         const conf = Number(m.confidence);
         tr.innerHTML =
-          `<td><strong>${key}</strong> <span style="color:var(--muted);font-size:12px">${METRIC_LABELS[key] || ""}</span></td>` +
+          `<td><strong>${key}</strong> <span style="color:var(--muted);font-size:14px">${METRIC_LABELS[key] || ""}</span></td>` +
           `<td><code style="font-family:Consolas,monospace">${m.value}</code></td>` +
           `<td><span class="conf-pill ${confClass(conf)}">${(conf*100).toFixed(1)}%</span></td>`;
         tbody.appendChild(tr);
@@ -693,7 +700,7 @@
       const steps = $("#fstec-steps");
       steps.style.display = "";
       steps.innerHTML =
-        `I_cvss = <b>${f(data.i_cvss, 1)}</b> <span class="muted">(базовый балл CVSS 3.1, ${data.cvss31_severity})</span><br>` +
+        `I_cvss = <b>${f(data.i_cvss, 1)}</b> <span class="muted">(базовый балл CVSS 3.1, ${sevRu(data.cvss31_severity)})</span><br>` +
         `I_infr = k·K + l·L + p·P = 0.5·${f(b.k_value)} + 0.2·${f(b.l_value)} + 0.3·${f(b.p_value)} ` +
         `= ${f(b.k_term)} + ${f(b.l_term)} + ${f(b.p_term)} = <b>${f(data.i_infr)}</b><br>` +
         `I_at = e·E = 1.0·${f(b.e_value)} = <b>${f(data.i_at)}</b><br>` +

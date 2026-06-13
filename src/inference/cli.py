@@ -36,6 +36,15 @@ SEVERITY_STYLE = {
     "None": "dim",
 }
 
+# Русские названия уровней критичности для вывода.
+SEVERITY_RU = {
+    "Critical": "Критический",
+    "High": "Высокий",
+    "Medium": "Средний",
+    "Low": "Низкий",
+    "None": "Отсутствует",
+}
+
 
 # ----------------------------------------------------------------- shared opts
 def _shared_model_options(f):
@@ -67,7 +76,8 @@ def _build_predictor(
 
 
 def _severity_text(severity: str) -> Text:
-    return Text(severity, style=SEVERITY_STYLE.get(severity, "white"))
+    label = SEVERITY_RU.get(severity, severity)
+    return Text(label, style=SEVERITY_STYLE.get(severity, "white"))
 
 
 # ------------------------------------------------------------------ predict
